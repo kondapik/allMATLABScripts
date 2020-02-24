@@ -30,7 +30,7 @@ classdef reqAnalysis < handle
     methods (Access = public)
         function [napp] = reqAnalysis()
             %bdclose('all');
-            %currFolder = pwd;
+            currFolder = pwd;
 
             [docName,reqPath] = uigetfile({'*.doc;*.docx','Word Files (*.doc;*.docx)'},'Select Requirement Document');
             cd(reqPath);
@@ -84,6 +84,7 @@ classdef reqAnalysis < handle
 
                 close(napp.progBar);
                 msgbox({'Done';'Done Dana Done'},'Success');
+                cd(currFolder);
             end 
         end
     end
