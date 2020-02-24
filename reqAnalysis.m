@@ -4,7 +4,7 @@
 %
     CREATED BY : Kondapi V S Krishna Prasanth
     DATE OF CREATION: 23-Feb-2020
-    LAST MODIFIED: 23-Feb-2020
+    LAST MODIFIED: 24-Feb-2020
 %
     VERSION MANAGER
     v1      
@@ -138,27 +138,33 @@ classdef reqAnalysis < handle
                         [requirementID, regLen, ~] = napp.getReqId(napp.reqSentences{napp.docIdx}(startPos(2) + 1:endPos(2) - 1));
                         lastNo = str2num(requirementID(regLen - 2 : regLen));
                         [napp.revReq,reqIdx] = napp.reqHistory(napp.revReq,requirementID,reqIdx,firstNo,lastNo,revHis,revTag);
-                    elseif goTo == 1
+                    end
+
+                    if goTo == 1
                         requirementID = napp.revReq(reqIdx).ReqID;
                         regLen = length(requirementID);
                         firstNo = str2num(requirementID(regLen - 2 : regLen));
                         [requirementID, regLen, ~] = napp.getReqId(napp.reqSentences{napp.docIdx}(startPos(1) + 1:endPos(1) - 1));
                         lastNo = str2num(requirementID(regLen - 2 : regLen));
                         [napp.revReq,reqIdx] = napp.reqHistory(napp.revReq,requirementID,reqIdx,firstNo + 1,lastNo,revHis,revTag);
-                        goTo = 0;
-                    elseif length(startPos) > 1
+                    end
+                    
+                    if length(startPos) > 1 && isempty(regexp(napp.reqSentences{napp.docIdx},'>\s*to\s*<','ONCE'))
                         [requirementID, regLen, ~] = napp.getReqId(napp.reqSentences{napp.docIdx}(startPos(2) + 1:endPos(2) - 1));
                         firstNo = str2num(requirementID(regLen - 2 : regLen));
                         [napp.revReq,reqIdx] = napp.reqHistory(napp.revReq,requirementID,reqIdx,firstNo,firstNo,revHis,revTag);
-                    else
+                    elseif goTo == 0 && isempty(regexp(napp.reqSentences{napp.docIdx},'>\s*to\s*<','ONCE'))
                         [requirementID, regLen, ~] = napp.getReqId(napp.reqSentences{napp.docIdx}(startPos(1) + 1:endPos(1) - 1));
                         firstNo = str2num(requirementID(regLen - 2 : regLen));
                         [napp.revReq,reqIdx] = napp.reqHistory(napp.revReq,requirementID,reqIdx,firstNo,firstNo,revHis,revTag);
                     end
+                    
 
                     if ~isempty(regexp(napp.reqSentences{napp.docIdx},'>\s*to(?!\s*<)','ONCE'))
                         %*disp('found out-to');
                         goTo = 1;
+                    else
+                        goTo = 0;
                     end
                 end
                 if ~isempty(regexp(napp.reqSentences{napp.docIdx},'^Table of Contents','ONCE'))
