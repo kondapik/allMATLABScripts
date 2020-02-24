@@ -33,14 +33,19 @@ classdef reqAnalysis < handle
             currFolder = pwd;
 
             [docName,reqPath] = uigetfile({'*.doc;*.docx','Word Files (*.doc;*.docx)'},'Select Requirement Document');
-            cd(reqPath);
+            
 
             %disp(napp.framePath);
             if isequal(docName,0)
                 %!File Not Selected
                 msgbox('Ahhhhh, you din''t select any file and that''s not fair','Error','error');
             else
+                cd(reqPath);
                 napp.progBar = waitbar(0,{'Importing requirements(1/4)','Reading word file...'},'Name','Requirement Analysis');
+                pos = get(napp.progBar,'Position');
+                pos(4) = pos(4) + 20;
+                set(napp.progBar,'Position',pos);
+                
                 napp.exitFlag = 1;
                 %* Reading word file
                 word = actxserver('Word.Application');
@@ -78,9 +83,11 @@ classdef reqAnalysis < handle
                     end
                 end
 
-                napp.Requirements = struct('ReqID',{},'Revs',{},'Revisions',{},'Deleted',{},'Found',{});
+                napp.Requirements = struct('ReqID',{},'Revs',{},'Revisions',{},'Usage',{},'Found',{},'TagErr',{},'RevErr',{},'ExpRev',{});
 
                 allRequirements(napp);
+
+                reqCheck(napp);
 
                 close(napp.progBar);
                 msgbox({'Done';'Done Dana Done'},'Success');
@@ -151,7 +158,7 @@ classdef reqAnalysis < handle
                     end
                 end
                 if ~isempty(regexp(napp.reqSentences{napp.docIdx},'^Table of Contents','ONCE'))
-                    disp('Found Table of Contents');
+                    %disp('Found Table of Contents');
                     exitWhile = 0;
                 end
             end
@@ -171,27 +178,81 @@ classdef reqAnalysis < handle
                         reqIdx = reqIdx + 1;
                         [requirementID, ~, napp.Requirements(reqIdx).Revs] = napp.getReqId(requirementID);
                         napp.Requirements(reqIdx).ReqID = 'ID';
-                        waitbar(0.5 + (reqIdx / maxReq)*(0.25),napp.progBar,{'Reading requirement IDs(3/4)',sprintf('Current Requirement ID: %s...',requirementID)});
+                        waitbar(0.5 + (reqIdx / maxReq)*(0.25),napp.progBar,{'Reading requirement IDs(3/4)','Current Requirement ID',regexprep(requirementID,'_','\\_')});
 
                         if reqIdx > 1 && ~isempty(find(contains(string({napp.Requirements.ReqID}),requirementID)))
+                            msgbox()
                             %!fprintf('Found Duplicate:%s\n',requirementID);
+                            msgbox(sprintf('Duplicate Requirement IDs found: %s',regexprep(requirementID,'_','\\_')),'Error','error');
                             exitWhile = 0;
                         else
                             napp.Requirements(reqIdx).ReqID = requirementID;
                             napp.Requirements(reqIdx).Found = 'No';
                             napp.Requirements(reqIdx).Revisions = zeros(1,napp.revNo);
                             if ~isempty(regexp(napp.reqSentences{napp.docIdx},'>\s*#\s*(D|d)(E|e)(L|l)(E|e)(T|t)(E|e)(D|d)','ONCE'))
-                                napp.Requirements(reqIdx).Deleted = 'Deleted';
+                                napp.Requirements(reqIdx).Usage = 'Deleted';
+                            elseif ~isempty(regexp(napp.reqSentences{napp.docIdx},'>\s*#\s*(M|m)(O|o)(V|v)(E|e)(D|d)','ONCE'))
+                                napp.Requirements(reqIdx).Usage = 'Moved';
                             else
-                                napp.Requirements(reqIdx).Deleted = 'InUse';
+                                napp.Requirements(reqIdx).Usage = 'InUse';
                             end
                             %*fprintf('ID:%s\n',requirementID);
                         end
                     end
                 end
                 if ~isempty(regexp(napp.reqSentences{napp.docIdx},'^BSW Requirements','ONCE'))
-                    disp('BSW requirements');
+                    %disp('BSW requirements');
                     exitWhile = 0;
+                end
+            end
+        end
+
+        function reqCheck(napp)
+            allReqHis = unique({napp.revReq.Revision});
+            histIDs = {napp.revReq.ReqID};
+            for reqNo = 1 : length(napp.Requirements)
+                revHisNo = 0;
+                foundIdx = find(contains(string(histIDs),napp.Requirements(reqNo).ReqID));
+                waitbar(0.75 + (reqNo / length(napp.Requirements))*(0.25),napp.progBar,{'Analysing requirement IDs(4/4)','Current Requirement ID',regexprep(napp.Requirements(reqNo).ReqID,'_','\\_')});
+                if ~isempty(foundIdx)
+                    napp.Requirements(reqNo).Found = 'Yes';
+                    for histNo = 1 : length(foundIdx)
+
+                        napp.revReq(foundIdx(histNo)).Found = 'Yes';
+                        %Criteria to check the revisions of requirements
+                        revIdx = find(contains(string(allReqHis),napp.revReq(foundIdx(histNo)).Revision));
+                        revIdx = revIdx(1);
+                        napp.Requirements(reqNo).Revisions(revIdx) = 1;
+
+                        if isequal(napp.revReq(foundIdx(histNo)).Tag,'Modified') & (revIdx > 3)
+                            revHisNo = revHisNo + 1;
+                        end
+
+                        if histNo == length(foundIdx)
+                            if isequal(napp.revReq(foundIdx(histNo)).Tag,'Deleted')
+                                if isequal(napp.Requirements(reqNo).Usage,'Deleted')
+                                    napp.Requirements(reqNo).TagErr = 'No Error';
+                                else
+                                    napp.Requirements(reqNo).TagErr = 'Error';
+                                end
+                            end
+
+                            if isequal(napp.revReq(foundIdx(histNo)).Tag,'Moved')
+                                if isequal(napp.Requirements(reqNo).Usage,'Moved')
+                                    napp.Requirements(reqNo).TagErr = 'No Error';
+                                else
+                                    napp.Requirements(reqNo).TagErr = 'Error';
+                                end
+                            end
+
+                            if isequal(napp.Requirements(reqNo).Revs,revHisNo)
+                                napp.Requirements(reqNo).RevErr = 'No Error';
+                            else
+                                napp.Requirements(reqNo).RevErr = 'Error';
+                            end
+                            napp.Requirements(reqNo).ExpRev = revHisNo;
+                        end
+                    end
                 end
             end
         end
