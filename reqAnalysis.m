@@ -73,7 +73,7 @@ classdef reqAnalysis < handle
                 %>\s*to -> > to
                 %>\s*to(?!\s*<) -> > to *(not foloowed by <) 
                 %>\s*to\s*< -> > to <
-                napp.revReq = struct('ReqID',{},'Revision',{},'Tag',{},'Found',{});
+                napp.revReq = struct('ReqID',{},'Revision',{},'Tag',{},'Found',{},'ErrFlg',{});
                 readingHistory(napp);
 
                 exitWhile = 1;
@@ -226,7 +226,38 @@ classdef reqAnalysis < handle
                 waitbar(0.75 + (reqNo / length(napp.Requirements))*(0.25),napp.progBar,{'Analysing requirement IDs(4/4)','Current Requirement ID',regexprep(napp.Requirements(reqNo).ReqID,'_','\\_')});
                 if ~isempty(foundIdx)
                     napp.Requirements(reqNo).Found = 'Yes';
+                    freshReq = 1;
+                    reReq = 0;
+                    zomReq = 0;
                     for histNo = 1 : length(foundIdx)
+                        napp.revReq(foundIdx(histNo)).ErrFlg = 'No Error';
+                        if freshReq == 1
+                            prevReq = napp.revReq(foundIdx(histNo)).Revision;
+                        elseif isequal(prevReq,napp.revReq(foundIdx(histNo)).Revision)
+                            napp.revReq(foundIdx(histNo)).ErrFlg = 'Multiple';
+                        else
+                            prevReq = napp.revReq(foundIdx(histNo)).Revision;
+                        end
+
+                        if  reReq == 0 && isequal(napp.revReq(foundIdx(histNo)).Tag,'New')
+                            reReq = 1;
+                        elseif reReq == 1 && isequal(napp.revReq(foundIdx(histNo)).Tag,'New')
+                            if isequal(napp.revReq(foundIdx(histNo)).ErrFlg,'No Error')
+                                napp.revReq(foundIdx(histNo)).ErrFlg = 'Reincarnated';
+                            else
+                                napp.revReq(foundIdx(histNo)).ErrFlg = sprintf('%s, Reincarnated',napp.revReq(foundIdx(histNo)).ErrFlg);
+                            end
+                        end
+
+                        if zomReq == 0 && (isequal(napp.revReq(foundIdx(histNo)).Tag,'Moved') || isequal(napp.revReq(foundIdx(histNo)).Tag,'Deleted'))
+                            zomReq = 1;
+                        elseif zomReq == 1 && (isequal(napp.revReq(foundIdx(histNo)).Tag,'Moved') || isequal(napp.revReq(foundIdx(histNo)).Tag,'Deleted'))
+                            if isequal(napp.revReq(foundIdx(histNo)).ErrFlg,'No Error')
+                                napp.revReq(foundIdx(histNo)).ErrFlg = 'Zombie';
+                            else
+                                napp.revReq(foundIdx(histNo)).ErrFlg = sprintf('%s, Zombie',napp.revReq(foundIdx(histNo)).ErrFlg);
+                            end
+                        end
 
                         napp.revReq(foundIdx(histNo)).Found = 'Yes';
                         %Criteria to check the revisions of requirements
@@ -239,18 +270,20 @@ classdef reqAnalysis < handle
                         end
 
                         if histNo == length(foundIdx)
-                            if isequal(napp.revReq(foundIdx(histNo)).Tag,'Deleted')
-                                if isequal(napp.Requirements(reqNo).Usage,'Deleted')
+                            if isequal(napp.Requirements(reqNo).Usage,'Deleted')
+                                if isequal(napp.revReq(foundIdx(histNo)).Tag,'Deleted')
                                     napp.Requirements(reqNo).TagErr = 'No Error';
                                 else
                                     napp.Requirements(reqNo).TagErr = 'Error';
                                 end
-                            elseif isequal(napp.revReq(foundIdx(histNo)).Tag,'Moved')
-                                if isequal(napp.Requirements(reqNo).Usage,'Moved')
+                            elseif isequal(napp.Requirements(reqNo).Usage,'Moved')
+                                if isequal(napp.revReq(foundIdx(histNo)).Tag,'Moved')
                                     napp.Requirements(reqNo).TagErr = 'No Error';
                                 else
                                     napp.Requirements(reqNo).TagErr = 'Error';
                                 end
+                            elseif isequal(napp.revReq(foundIdx(histNo)).Tag,'Deleted') || isequal(napp.revReq(foundIdx(histNo)).Tag,'Moved')
+                                napp.Requirements(reqNo).TagErr = 'Error';
                             else
                                 napp.Requirements(reqNo).TagErr = 'No Error';
                             end
@@ -299,10 +332,13 @@ classdef reqAnalysis < handle
             Ex_range = Ex_range.get('Offset',0,1);
             Ex_range.Value = 'Found in Req';
             Ex_range.Interior.ColorIndex = 20;
+            Ex_range = Ex_range.get('Offset',0,1);
+            Ex_range.Value = 'Error Flags';
+            Ex_range.Interior.ColorIndex = 20;
 
             for reqNo = 1 : length(napp.revReq)
                 waitbar((reqNo / length(napp.revReq))*(0.5),napp.progBar,{'Exporting results to Excel','Current Revision',napp.revReq(reqNo).Revision});
-                Ex_range = Ex_range.get('Offset',1,-3);
+                Ex_range = Ex_range.get('Offset',1,-4);
                 Ex_range.Value = napp.revReq(reqNo).ReqID;
                 Ex_range = Ex_range.get('Offset',0,1);
                 Ex_range.Value = napp.revReq(reqNo).Revision;
@@ -310,12 +346,14 @@ classdef reqAnalysis < handle
                 Ex_range.Value = napp.revReq(reqNo).Tag;
                 Ex_range = Ex_range.get('Offset',0,1);
                 Ex_range.Value = napp.revReq(reqNo).Found;
+                Ex_range = Ex_range.get('Offset',0,1);
+                Ex_range.Value = napp.revReq(reqNo).ErrFlg;
             end
-            Ex_actSheet.Range(sprintf('A1:%s%d',(65 + 3),(reqNo + 1))).Borders.Item('xlInsideHorizontal').LineStyle = 1;
-            Ex_actSheet.Range(sprintf('A1:%s%d',(65 + 3),(reqNo + 1))).Borders.Item('xlInsideVertical').LineStyle = 1;
+            Ex_actSheet.Range(sprintf('A1:%s%d',(65 + 4),(reqNo + 2))).Borders.Item('xlInsideHorizontal').LineStyle = 1;
+            Ex_actSheet.Range(sprintf('A1:%s%d',(65 + 5),(reqNo + 1))).Borders.Item('xlInsideVertical').LineStyle = 1;
 
-            Ex_range = Ex_range.get('Offset',1,-(3));
-            for reqNo = 1:4
+            Ex_range = Ex_range.get('Offset',1,-(4));
+            for reqNo = 1:5
                 Ex_range.EntireColumn.AutoFit;
                 Ex_range = Ex_range.get('Offset',0,1);
             end
@@ -375,8 +413,8 @@ classdef reqAnalysis < handle
                 Ex_range.Value = napp.Requirements(reqNo).ExpRev;
             end
 
-            Ex_actSheet.Range(sprintf('A1:%s%d',(65 + 6 + napp.revNo),(reqNo + 1))).Borders.Item('xlInsideHorizontal').LineStyle = 1;
-            Ex_actSheet.Range(sprintf('A1:%s%d',(65 + 6 + napp.revNo),(reqNo + 1))).Borders.Item('xlInsideVertical').LineStyle = 1;
+            Ex_actSheet.Range(sprintf('A1:%s%d',(65 + 6 + napp.revNo),(reqNo + 2))).Borders.Item('xlInsideHorizontal').LineStyle = 1;
+            Ex_actSheet.Range(sprintf('A1:%s%d',(65 + 7 + napp.revNo),(reqNo + 1))).Borders.Item('xlInsideVertical').LineStyle = 1;
 
             Ex_range = Ex_range.get('Offset',1,-(6 + napp.revNo));
             for reqNo = 1: (7+ napp.revNo)
