@@ -95,6 +95,15 @@ classdef chromaticArduino < matlab.apps.AppBase
         EnablePlot                     matlab.ui.container.Menu
     end
 
+    properties (Access = private)
+        freqAxis;
+        lineLow;
+        lineMid;
+        lineHigh;
+        ledAxis;
+        lineBright;
+    end
+
     % Callbacks that handle component events
     methods (Access = private)
 
@@ -128,6 +137,83 @@ classdef chromaticArduino < matlab.apps.AppBase
             value = app.StartButton.Value;
             
         end
+
+        % Value changed function: ColorOrder
+        function ColorOrderValueChanged(app, event)
+            app.lineLow.Color = app.ColorOrder.Value(1);
+            app.lineMid.Color = app.ColorOrder.Value(2);
+            app.lineHigh.Color = app.ColorOrder.Value(3);
+        end
+
+        function lineLowMoving(app,source)
+            source.Position(1,2) = 0;
+            source.Position(2,2) = 0;
+
+            app.lineMid.Position(1,1) = source.Position(2,1);
+            app.minFreq.Position(1) = app.getPosition(source.Position(1,1),app.FreqSlider.Position(1),...
+                                                        app.FreqSlider.Position(3),app.minFreq.Position(3));
+            app.minFreq.Text = num2str(round(source.Position(1,1)));
+            app.MinFrequency.Value = round(source.Position(1,1));
+            
+            app.leftFreq.Position(1) = app.getPosition(source.Position(2,1),app.FreqSlider.Position(1),...
+                                                        app.FreqSlider.Position(3),app.leftFreq.Position(3));
+            app.leftFreq.Text = num2str(round(source.Position(2,1)));
+            app.LeftFrequency.Value = round(source.Position(2,1));
+        end
+        
+        function lineMidMoving(app,source)
+            source.Position(1,2) = 0;
+            source.Position(2,2) = 0;
+
+            app.lineLow.Position(2,1) = source.Position(1,1);
+
+            app.leftFreq.Position(1) = app.getPosition(source.Position(1,1),app.FreqSlider.Position(1),...
+                                                        app.FreqSlider.Position(3),app.leftFreq.Position(3));
+            app.leftFreq.Text = num2str(round(source.Position(1,1)));
+            app.LeftFrequency.Value = round(source.Position(1,1));
+            
+            app.lineHigh.Position(1,1) = source.Position(2,1);
+            app.rightFreq.Position(1) = app.getPosition(source.Position(2,1),app.FreqSlider.Position(1),...
+                                                        app.FreqSlider.Position(3),app.rightFreq.Position(3));
+            app.rightFreq.Text = num2str(round(source.Position(2,1)));
+            app.RightFrequency.Value = round(source.Position(2,1));
+        end
+        
+        function lineHighMoving(app,source)
+            source.Position(1,2) = 0;
+            source.Position(2,2) = 0;
+
+            app.rightFreq.Position(1) = app.getPosition(source.Position(1,1),app.FreqSlider.Position(1),...
+                                                        app.FreqSlider.Position(3),app.rightFreq.Position(3));
+            app.rightFreq.Text = num2str(round(source.Position(1,1)));
+            app.RightFrequency.Value = round(source.Position(1,1));
+
+            app.lineMid.Position(2,1) = source.Position(1,1);
+            app.maxFreq.Position(1) = app.getPosition(source.Position(2,1),app.FreqSlider.Position(1),...
+                                                        app.FreqSlider.Position(3),app.maxFreq.Position(3));
+            app.maxFreq.Text = num2str(round(source.Position(2,1)));
+            app.MaxFrequency.Value = round(source.Position(2,1));
+        end
+
+        function lineBrightMoving(~,source)
+            source.Position(1,1) = 0;
+            source.Position(1,2) = 0;
+            source.Position(2,2) = 0;
+        end
+    end
+
+    methods (Static)
+
+        function mappedValue = mapValue(value, fromLow, fromHigh, toLow, toHigh)
+            % map 'value' from 'from range' to 'to range'
+            mappedValue = (value - fromLow) * (toHigh - toLow) / (fromHigh - fromLow) + toLow;
+        end
+
+        function xPos = getPosition(freq, sliderPos, sliderWidth, blockWidth)
+            %get x_position of the label based on slider width and position 
+            xPos = (((freq - 20)/(20000 - 20))*sliderWidth) + sliderPos - (blockWidth/2);
+        end
+
     end
 
     % Component initialization
@@ -193,6 +279,7 @@ classdef chromaticArduino < matlab.apps.AppBase
             % Create FreqSlider
             app.FreqSlider = uislider(app.Panel);
             app.FreqSlider.Visible = 'off';
+            app.FreqSlider.Enable = 'off';
             app.FreqSlider.Tooltip = {'Select Frequency Ranges for Audio Analysis'};
             app.FreqSlider.Position = [33 54 714 3];
 
@@ -222,7 +309,10 @@ classdef chromaticArduino < matlab.apps.AppBase
 
             % Create ColorOrder
             app.ColorOrder = uidropdown(app.Panel);
-            app.ColorOrder.Items = {'RRR', 'RRG', 'RRB', 'RGR', 'RGG', 'RGB', 'RBR', 'RBG', 'RBB', 'GRR', 'GRG', 'GRB', 'GGR', 'GGG', 'GGB', 'GBR', 'GBG', 'GBB', 'BRR', 'BRG', 'BRB', 'BGR', 'BGG', 'BGB', 'BBR', 'BBG', 'BBB'};
+            app.ColorOrder.Items = {'RRR', 'RRG', 'RRB', 'RGR', 'RGG', 'RGB', 'RBR', 'RBG','RBB',...
+                                    'GRR', 'GRG', 'GRB', 'GGR', 'GGG', 'GGB', 'GBR','GBG', 'GBB',...
+                                     'BRR', 'BRG', 'BRB', 'BGR', 'BGG', 'BGB', 'BBR', 'BBG', 'BBB'};
+            app.ColorOrder.ValueChangedFcn = createCallbackFcn(app, @ColorOrderValueChanged, true);
             app.ColorOrder.FontName = 'Microsoft JhengHei UI';
             app.ColorOrder.Position = [246 170 63 22];
             app.ColorOrder.Value = 'BGR';
@@ -239,9 +329,10 @@ classdef chromaticArduino < matlab.apps.AppBase
             app.LEDSlider.MajorTicks = [0 20 40 60 80 100];
             app.LEDSlider.MajorTickLabels = {'0', '20', '40', '60', '80', '100'};
             app.LEDSlider.Visible = 'off';
+            app.LEDSlider.Enable = 'off';
             app.LEDSlider.Tooltip = {'LED Brightness'};
             app.LEDSlider.FontName = 'Microsoft JhengHei UI';
-            app.LEDSlider.Position = [441 179 181 3];
+            app.LEDSlider.Position = [441 180 181 3];
 
             % Create FPSCheckBox
             app.FPSCheckBox = uicheckbox(app.Panel);
@@ -542,7 +633,7 @@ classdef chromaticArduino < matlab.apps.AppBase
             app.MinFrequency.HorizontalAlignment = 'center';
             app.MinFrequency.FontName = 'Microsoft JhengHei UI';
             app.MinFrequency.Position = [576 391 114 22];
-            app.MinFrequency.Value = 20;
+            app.MinFrequency.Value = 50;
 
             % Create LeftFrequencyEditFieldLabel
             app.LeftFrequencyEditFieldLabel = uilabel(app.PreferencesTab);
@@ -678,9 +769,69 @@ classdef chromaticArduino < matlab.apps.AppBase
             % Create EnablePlot
             app.EnablePlot = uimenu(app.PlotMenu);
             app.EnablePlot.MenuSelectedFcn = createCallbackFcn(app, @EnablePlotMenuSelected, true);
-            app.EnablePlot.Text = 'Display Plot';
+            app.EnablePlot.Text = 'Enable Plot';
 
+            % Creating axis for frequency selection 
+            app.freqAxis = axes(app.Panel,'Color','none','YColor','none','XLim',[20,20000],'YTick',[], ...
+                    'XTick',0:1000:20000,'TickDir','both','XMinorTick', ...
+                    'off','Units','pixels','Position',app.FreqSlider.Position);
+             
+            % Disable the interactivity & toolbar visibility
+            disableDefaultInteractivity(app.freqAxis);
+            app.freqAxis.Toolbar.Visible = 'off';
+
+            % Add the line for low frequency band
+            app.lineLow = images.roi.Line(app.freqAxis,'Position',[app.MinFrequency.Value,0;app.LeftFrequency.Value,0],'Color',app.ColorOrder.Value(1));
+            % Add a listener that will trigger a callback function titled "lineLowMoving" when user
+            % moves the ROI endpoints or the line ROI as a whole
+            addlistener(app.lineLow,'MovingROI',@(varargin)lineLowMoving(app,app.lineLow));
+
+            % Add the line for mid frequency band
+            app.lineMid = images.roi.Line(app.freqAxis,'Position',[app.LeftFrequency.Value,0;app.RightFrequency.Value,0],'Color',app.ColorOrder.Value(2));
+            % Add a listener that will trigger a callback function titled "lineMidMoving" when user
+            % moves the ROI endpoints or the line ROI as a whole
+            addlistener(app.lineMid,'MovingROI',@(varargin)lineMidMoving(app,app.lineMid));
+
+            % Add the line for high frequency band
+            app.lineHigh = images.roi.Line(app.freqAxis,'Position',[app.RightFrequency.Value,0;app.MaxFrequency.Value,0],'Color',app.ColorOrder.Value(3));
+            % Add a listener that will trigger a callback function titled "lMoving" when user
+            % moves the ROI endpoints or the line ROI as a whole
+            addlistener(app.lineHigh,'MovingROI',@(varargin)lineHighMoving(app,app.lineHigh));
+
+            %SetPosition and value of labels
+            app.minFreq.Position(1) = app.getPosition(app.MinFrequency.Value,app.FreqSlider.Position(1),...
+                                                        app.FreqSlider.Position(3),app.minFreq.Position(3));
+            app.minFreq.Text = num2str(app.MinFrequency.Value);
+
+            app.leftFreq.Position(1) = app.getPosition(app.LeftFrequency.Value,app.FreqSlider.Position(1),...
+                                                        app.FreqSlider.Position(3),app.leftFreq.Position(3));
+            app.leftFreq.Text = num2str(app.LeftFrequency.Value);
+
+            app.rightFreq.Position(1) = app.getPosition(app.RightFrequency.Value,app.FreqSlider.Position(1),...
+                                                        app.FreqSlider.Position(3),app.rightFreq.Position(3));
+            app.rightFreq.Text = num2str(app.RightFrequency.Value);
+
+            app.maxFreq.Position(1) = app.getPosition(app.MaxFrequency.Value,app.FreqSlider.Position(1),...
+                                                        app.FreqSlider.Position(3),app.maxFreq.Position(3));
+            app.maxFreq.Text = num2str(app.MaxFrequency.Value);
+
+            % Creating axis for frequency selection 
+            app.ledAxis = axes(app.Panel,'Color','none','YColor','none','XLim',[0,100],'YTick',[], ...
+                    'XTick',0:20:100,'TickDir','both','XMinorTick', ...
+                    'off','Units','pixels','Position',app.LEDSlider.Position);
+             
+            % Disable the interactivity & toolbar visibility
+            disableDefaultInteractivity(app.ledAxis);
+            app.ledAxis.Toolbar.Visible = 'off';
+
+            % Add the line for LED Brightness
+            app.lineBright = images.roi.Line(app.ledAxis,'Position',[0,0; 100,0],'Color','C');
+            % Add a listener that will trigger a callback function titled "lineLowMoving" when user
+            % moves the ROI endpoints or the line ROI as a whole
+            %addlistener(app.lineLow,'MovingROI',@(varargin)lineLowMoving(app,app.lineLow));
+            addlistener(app.lineBright,'MovingROI',@(varargin)lineBrightMoving(app,app.lineBright));
             % Show the figure after all components are created
+
             app.audioControl.Visible = 'on';
         end
     end
