@@ -111,15 +111,7 @@ classdef chromaticArduino < matlab.apps.AppBase
         speedCtrlAxis;
         speedCtrl;
 
-        prevMinFreq;
-        prevLeftFreq;
-        prevRightFreq;
-        prevMaxFreq;
-
-        prevRedPin;
-        prevBluePin;
-        prevGreenPin;
-
+        audioReader;
     end
 
     % Callbacks that handle component events
@@ -127,7 +119,8 @@ classdef chromaticArduino < matlab.apps.AppBase
 
         % Code that executes after component creation
         function startupFcn(app)
-            
+            app.audioReader = audioDeviceReader();
+            app.AudioDevice.Items = getAudioDevices(app.audioReader);
         end
 
         % Close request function: audioControl
@@ -175,11 +168,16 @@ classdef chromaticArduino < matlab.apps.AppBase
         % Value changed function: LeftFrequency, MaxFrequency, 
         % MinFrequency, RightFrequency
         function FrequencyValueChanged(app, event)
-            fprintf('%s,%d',event.Source.Tag,event.PreviousValue);
-            % if app.MinFrequency.Value > app.LeftFrequency.Value
-            %     app.MinFrequency.Value = app.prevMinFreq;
-            % else
-            % end
+            if isequal(event.Source.Tag, 'minFreq') && (app.MinFrequency.Value >= app.LeftFrequency.Value - 200)
+                app.MinFrequency.Value = event.PreviousValue;
+            elseif isequal(event.Source.Tag, 'leftFreq') && ((app.MinFrequency.Value >= app.LeftFrequency.Value - 200) || (app.LeftFrequency.Value >= app.RightFrequency.Value - 200))
+                app.LeftFrequency.Value = event.PreviousValue;
+            elseif isequal(event.Source.Tag, 'rightFreq') && ((app.LeftFrequency.Value >= app.RightFrequency.Value - 200) || (app.RightFrequency.Value >= app.MaxFrequency.Value - 200))
+                app.RightFrequency.Value = event.PreviousValue;
+            elseif isequal(event.Source.Tag, 'maxFreq') && (app.RightFrequency.Value >= app.MaxFrequency.Value - 200)
+                app.MaxFrequency.Value = event.PreviousValue;
+            end
+
             app.lineLow.Position(1,1) = app.MinFrequency.Value;
             app.lineLow.Position(2,1) = app.LeftFrequency.Value;
             lineLowMoving(app,app.lineLow);
@@ -195,8 +193,13 @@ classdef chromaticArduino < matlab.apps.AppBase
 
         % Value changed function: BluePin, GreenPin, RedPin
         function LEDPinValueChanged(app, event)
-            value = app.RedPin.Value;
-            fprintf('%s,%s',event.Source.Tag, event.PreviousValue)
+            if isequal(event.Source.Tag, 'redPin') && (isequal(event.Value,app.GreenPin.Value) || isequal(event.Value,app.BluePin.Value))
+                app.RedPin.Value = event.PreviousValue;
+            elseif isequal(event.Source.Tag, 'greenPin') && (isequal(event.Value,app.RedPin.Value) || isequal(event.Value,app.BluePin.Value))
+                app.GreenPin.Value = event.PreviousValue;
+            elseif isequal(event.Source.Tag, 'bluePin') && (isequal(event.Value,app.GreenPin.Value) || isequal(event.Value,app.RedPin.Value))
+                app.BluePin.Value = event.PreviousValue;
+            end
         end
 
         % Selection changed function: ModeGroup
@@ -222,6 +225,11 @@ classdef chromaticArduino < matlab.apps.AppBase
                 app.lineHigh.InteractionsAllowed = 'none';
             end
             drawnow;
+        end
+
+        % Value changed function: AudioDevice
+        function AudioDeviceValueChanged(app, ~)
+            app.audioReader = audioDeviceReader('Device',app.AudioDevice.Value);
         end
 
         function lineLowMoving(app,source)
@@ -643,6 +651,7 @@ classdef chromaticArduino < matlab.apps.AppBase
             % Create AudioDevice
             app.AudioDevice = uidropdown(app.ControlTab);
             app.AudioDevice.Items = {'Default'};
+            app.AudioDevice.ValueChangedFcn = createCallbackFcn(app, @AudioDeviceValueChanged, true);
             app.AudioDevice.Tooltip = {'Audio source for analysis'};
             app.AudioDevice.FontName = 'Microsoft JhengHei UI';
             app.AudioDevice.Position = [262 434 153 22];
