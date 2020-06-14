@@ -6,7 +6,7 @@
 %
     CREATED BY : Kondapi V S Krishna Prasanth
     DATE OF CREATION: 13-June-2020
-    LAST MODIFIED: 13-June-2020
+    LAST MODIFIED: 15-June-2020
 %
     VERSION MANAGER
     v1      Initial implementation
@@ -65,12 +65,12 @@ classdef chromaticArduino < matlab.apps.AppBase
         GainLimit                      matlab.ui.control.NumericEditField
         VolToleranceEditFieldLabel     matlab.ui.control.Label
         VolTolerance                   matlab.ui.control.NumericEditField
-        AplhaDecayAudioEditFieldLabel  matlab.ui.control.Label
-        AplhaDecayAudio                matlab.ui.control.NumericEditField
-        AplhaDecayGainEditFieldLabel   matlab.ui.control.Label
-        AplhaDecayGain                 matlab.ui.control.NumericEditField
-        AplhaDecayLEDEditFieldLabel    matlab.ui.control.Label
-        AplhaDecayLED                  matlab.ui.control.NumericEditField
+        AlphaDecayAudioEditFieldLabel  matlab.ui.control.Label
+        AlphaDecayAudio                matlab.ui.control.NumericEditField
+        AlphaDecayGainEditFieldLabel   matlab.ui.control.Label
+        AlphaDecayGain                 matlab.ui.control.NumericEditField
+        AlphaDecayLEDEditFieldLabel    matlab.ui.control.Label
+        AlphaDecayLED                  matlab.ui.control.NumericEditField
         MinFrequencyEditFieldLabel     matlab.ui.control.Label
         MinFrequency                   matlab.ui.control.NumericEditField
         LowFrequencyLabel              matlab.ui.control.Label
@@ -79,12 +79,12 @@ classdef chromaticArduino < matlab.apps.AppBase
         RightFrequency                 matlab.ui.control.NumericEditField
         MaxFrequencyEditFieldLabel     matlab.ui.control.Label
         MaxFrequency                   matlab.ui.control.NumericEditField
-        AplhaRiseAudioEditFieldLabel   matlab.ui.control.Label
-        AplhaRiseAudio                 matlab.ui.control.NumericEditField
-        AplhaRiseGainEditFieldLabel    matlab.ui.control.Label
-        AplhaRiseGain                  matlab.ui.control.NumericEditField
-        AplhaRiseLEDEditFieldLabel     matlab.ui.control.Label
-        AplhaRiseLED                   matlab.ui.control.NumericEditField
+        AlphaRiseAudioEditFieldLabel   matlab.ui.control.Label
+        AlphaRiseAudio                 matlab.ui.control.NumericEditField
+        AlphaRiseGainEditFieldLabel    matlab.ui.control.Label
+        AlphaRiseGain                  matlab.ui.control.NumericEditField
+        AlphaRiseLEDEditFieldLabel     matlab.ui.control.Label
+        AlphaRiseLED                   matlab.ui.control.NumericEditField
         AboutTab                       matlab.ui.container.Tab
         Image                          matlab.ui.control.Image
         PreferenceMenu                 matlab.ui.container.ContextMenu
@@ -112,6 +112,8 @@ classdef chromaticArduino < matlab.apps.AppBase
         speedCtrl;
 
         audioReader;
+        arduinoBoard;
+        displayPlot;
     end
 
     % Callbacks that handle component events
@@ -121,6 +123,50 @@ classdef chromaticArduino < matlab.apps.AppBase
         function startupFcn(app)
             app.audioReader = audioDeviceReader();
             app.AudioDevice.Items = getAudioDevices(app.audioReader);
+
+            app.arduinoBoard = arduino();
+            app.RedPin.Items = app.arduinoBoard.AvailablePWMPins;
+            app.BluePin.Items = app.arduinoBoard.AvailablePWMPins;
+            app.GreenPin.Items = app.arduinoBoard.AvailablePWMPins;
+
+            if exist(fullfile(getenv('APPDATA'), 'chromaticArduino','preferences.json')) ~= 0
+                dataValues = jsondecode(fileread(fullfile(getenv('APPDATA'), 'chromaticArduino','preferences.json')));
+                app.RedPin.Value = dataValues.RedPin;
+                app.GreenPin.Value = dataValues.GreenPin;
+                app.BluePin.Value = dataValues.BluePin;
+                app.ColorOrder.Value = dataValues.ColorOrder;
+                app.speedCtrl.Position(2,1) = dataValues.LEDSpeed;
+                app.lineBright.Position(2,1) = dataValues.LEDBrightness;
+                app.AudioFPS.Value = dataValues.TargetFPS;
+                app.NoofFFTbands.Value = dataValues.NoOfFFTBands; 
+                app.GainLimit.Value = dataValues.GainLimit;
+                app.VolTolerance.Value = dataValues.VolumeTolerance;
+                app.AlphaDecayLED.Value = dataValues.AlphaDecayLED;
+                app.AlphaRiseLED.Value = dataValues.AlphaRiseLED;
+                app.MinFrequency.Value = dataValues.MinimumFrequency;
+                app.LeftFrequency.Value = dataValues.LowFrequency;
+                app.RightFrequency.Value = dataValues.HighFrequency;
+                app.MaxFrequency.Value = dataValues.MaximumFrequency;
+                app.AlphaDecayAudio.Value = dataValues.AlphaDecayAudio;
+                app.AlphaRiseAudio.Value = dataValues.AlphaRiseAudio;
+                app.AlphaDecayGain.Value = dataValues.AlphaDecayGain;
+                app.AlphaRiseGain.Value = dataValues.AlphaRiseGain;
+
+                app.lineLow.Position(1,1) = app.MinFrequency.Value;
+                app.lineLow.Position(2,1) = app.LeftFrequency.Value;
+                lineLowMoving(app,app.lineLow);
+
+                app.lineMid.Position(1,1) = app.LeftFrequency.Value;
+                app.lineMid.Position(2,1) = app.RightFrequency.Value;
+                lineMidMoving(app,app.lineMid);
+
+                app.lineHigh.Position(1,1) = app.RightFrequency.Value;
+                app.lineHigh.Position(2,1) = app.MaxFrequency.Value;
+                lineHighMoving(app,app.lineHigh);
+            else
+                mkdir(fullfile(getenv('APPDATA'), 'chromaticArduino'));
+                SavePreferencesMenuSelected(app);
+            end
         end
 
         % Close request function: audioControl
@@ -131,29 +177,148 @@ classdef chromaticArduino < matlab.apps.AppBase
 
         % Menu selected function: SavePreferences, SaveSettings
         function SavePreferencesMenuSelected(app, ~)
-%             jsonStr = jsonencode(app);
-%             fid = fopen('testingJson.json', 'w');
-%             if fid == -1, error('Cannot create JSON file'); end
-%             fwrite(fid, jsonStr, 'char');
-%             fclose(fid);
+            %disp('Saving Preference')
+            dataValues = struct('RedPin', app.RedPin.Value, 'GreenPin', app.GreenPin.Value, 'BluePin', app.BluePin.Value, 'ColorOrder', app.ColorOrder.Value,'LEDSpeed', app.speedCtrl.Position(2,1),...
+                                'LEDBrightness', app.lineBright.Position(2,1), 'TargetFPS', app.AudioFPS.Value, 'NoOfFFTBands', app.NoofFFTbands.Value, 'GainLimit', app.GainLimit.Value,...
+                                'VolumeTolerance', app.VolTolerance.Value, 'AlphaDecayLED', app.AlphaDecayLED.Value,'AlphaRiseLED', app.AlphaRiseLED.Value,...
+                                'MinimumFrequency', app.MinFrequency.Value, 'LowFrequency', app.LeftFrequency.Value, 'HighFrequency', app.RightFrequency.Value, 'MaximumFrequency', app.MaxFrequency.Value,...
+                                'AlphaDecayAudio', app.AlphaDecayAudio.Value,'AlphaRiseAudio', app.AlphaRiseAudio.Value,'AlphaDecayGain', app.AlphaDecayGain.Value,'AlphaRiseGain', app.AlphaRiseGain.Value);
+            jsonStr = jsonencode(dataValues);
+            fid = fopen(fullfile(getenv('APPDATA'), 'chromaticArduino','preferences.json'), 'w');
+            if fid == -1, error('Cannot create JSON file'); end
+            fwrite(fid, jsonStr, 'char');
+            fclose(fid);
+            %fullfile(getenv('APPDATA'), 'New')
         end
 
         % Menu selected function: EnablePlot
         function EnablePlotMenuSelected(app, ~)
-            
+            if isequal(app.EnablePlot.Text, 'Enable Plot')
+                app.EnablePlot.Text = 'Disable Plot';
+                app.displayPlot = true;
+            else
+                app.EnablePlot.Text = 'Enable Plot';
+                app.displayPlot = false;
+            end
         end
 
         % Value changed function: StartButton
         function StartButtonValueChanged(app, ~)
+            lowValue = 0.1;
+            midValue = 0.1;
+            highValue = 0.1;
+            gainValue = app.GainLimit.Value;
+            micRate = 44100;
+            numOfFrames = round(micRate/app.AudioFPS.Value);
+            app.audioReader = audioDeviceReader('Device',app.AudioDevice.Value,'SamplesPerFrame',numOfFrames);
+            audioData = zeros(numOfFrames,1);
+
+            sineTime = 0;
+            elapsedTime = 0;
+            fpsCounterTime = 0;
+            fpsCount = 0;
+
             if app.StartButton.Value
-                
+                app.StartButton.Text = 'Stop';
+                app.StartButton.BackgroundColor = [1 0 0];
+                app.StartButton.Tooltip = {'Stop controlling arduino'};
+                app.StartButton.FontColor = [1 1 1];
             else
-                disp('loopStopped');
+                app.StartButton.Text = 'Start';
+                app.StartButton.BackgroundColor = [0 0.902 0];
+                app.StartButton.Tooltip = {'Start controlling arduino'};
+                app.StartButton.FontColor = [0 0 0];
             end
             
+            fpsTimer = tic;
+
             while app.StartButton.Value
-                pause(0.01)
-                disp('loop');
+                
+                if app.FPSCheckBox.Value
+                    fpsTimer = tic;
+                else
+                    app.FPSCheckBox.Text = '  FPS:';
+                end
+
+                if app.AudioButton.Value
+                    audioData = app.expGain(app.audioReader(), audioData, app.AlphaDecayAudio.Value, app.AlphaRiseAudio.Value);
+                    hammedAudio = hamming(numOfFrames).*audioData;
+                    [melValues,cntFreq,~] = melSpectrogram(hammedAudio,44100,'WindowLength',numOfFrames,...
+                                                    'OverlapLength',round(numOfFrames/2),'NumBands',app.NoofFFTbands.Value,...
+                                                    'FrequencyRange',[app.MinFrequency.Value app.MaxFrequency.Value]);
+                    
+                    if max(melValues) > app.VolTolerance.Value
+
+                        if max(melValues) > app.GainLimit.Value 
+                            gainValue = app.expGain(max(melValues),gainValue,app.AlphaDecayGain.Value,app.AlphaRiseGain.Value);
+                        else
+                            gainValue = app.expGain(app.GainLimit.Value,gainValue,app.AlphaDecayGain.Value,app.AlphaRiseGain.Value);
+                        end
+
+                        melValues = melValues / gainValue;
+
+                        leftIndex = round(app.mapValue(app.LeftFrequency.Value, app.MinFrequency.Value, app.MaxFrequency.Value, 1, app.NoofFFTbands.Value));
+                        rightIndex = round(app.mapValue(app.RightFrequency.Value, app.MinFrequency.Value, app.MaxFrequency.Value, 1, app.NoofFFTbands.Value));
+                        
+                        lowBand = max(melValues(1 : leftIndex));
+                        midBand = max(melValues(leftIndex : rightIndex));
+                        highBand = max(melValues(rightIndex : app.NoofFFTbands.Value));
+
+                        lowValue = app.expGain(lowBand, lowValue, app.AlphaDecayLED.Value, app.AlphaRiseLED.Value);
+                        midValue = app.expGain(midBand, midValue, app.AlphaDecayLED.Value, app.AlphaRiseLED.Value);
+                        highValue = app.expGain(highBand, highValue, app.AlphaDecayLED.Value, app.AlphaRiseLED.Value);
+
+                        orderMap = containers.Map({app.ColorOrder.Value(1), app.ColorOrder.Value(2), app.ColorOrder.Value(3)},...
+                                            {lowValue, midValue, highValue});
+                        
+                        writePWMDutyCycle(app.arduinoBoard, app.RedPin.Value, app.setMax(orderMap('R'),1) * app.lineBright.Position(2,1) / 100);
+                        writePWMDutyCycle(app.arduinoBoard, app.GreenPin.Value, app.setMax(orderMap('G'),1) * app.lineBright.Position(2,1) / 100);
+                        writePWMDutyCycle(app.arduinoBoard, app.BluePin.Value, app.setMax(orderMap('B'),1) * app.lineBright.Position(2,1) / 100);
+
+                        if app.displayPlot
+                            plot(app.FreqPlot, cntFreq(1 : leftIndex), melValues(1 : leftIndex), app.ColorOrder.Value(1),...
+                                        cntFreq(leftIndex : rightIndex), melValues(leftIndex : rightIndex), app.ColorOrder.Value(2),...
+                                        cntFreq(rightIndex : app.NoofFFTbands.Value), melValues(rightIndex : app.NoofFFTbands.Value), app.ColorOrder.Value(3));
+                        end
+                    else
+                        writePWMDutyCycle(app.arduinoBoard, app.RedPin.Value, 0);
+                        writePWMDutyCycle(app.arduinoBoard, app.GreenPin.Value, 0);
+                        writePWMDutyCycle(app.arduinoBoard, app.BluePin.Value, 0);
+                    end
+                elseif app.RainbowButton.Value
+                    dispTimer = tic;
+                    pause(1 / app.AudioFPS.Value)
+                    sineValue = (2 * pi * sineTime * 2) / ((101 - app.speedCtrl.Position(2,1)) * app.AudioFPS.Value);
+                    writePWMDutyCycle(app.arduinoBoard,app.RedPin.Value,abs(sin(sineValue) * app.lineBright.Position(2,1) / 100));
+                    writePWMDutyCycle(app.arduinoBoard,app.GreenPin.Value,abs(sin(sineValue + (pi / 3)) * app.lineBright.Position(2,1) / 100));
+                    writePWMDutyCycle(app.arduinoBoard,app.BluePin.Value,abs(sin(sineValue + (2 * pi / 3)) * app.lineBright.Position(2,1) / 100));
+
+                    elapsedTime = elapsedTime + toc(dispTimer);
+                    if elapsedTime > 0.1 
+                        app.redCtrl.Position(2,1) = abs(sin(sineValue)) * 255;
+                        app.greenCtrl.Position(2,1) = abs(sin(sineValue + (pi / 3))) * 255;
+                        app.blueCtrl.Position(2,1) = abs(sin(sineValue + (2 * pi / 3))) * 255;
+                        elapsedTime = 0;
+                    end
+                    
+                    sineTime = sineTime + 1;
+                else
+                    pause(1)
+                    writePWMDutyCycle(app.arduinoBoard, app.RedPin.Value, (app.redCtrl.Position(2,1) / 255) * (app.lineBright.Position(2,1) / 100));
+                    writePWMDutyCycle(app.arduinoBoard, app.GreenPin.Value, (app.greenCtrl.Position(2,1) / 255) * (app.lineBright.Position(2,1) / 100));
+                    writePWMDutyCycle(app.arduinoBoard, app.BluePin.Value, (app.blueCtrl.Position(2,1) / 255) * (app.lineBright.Position(2,1) / 100));
+                end
+
+                if app.FPSCheckBox.Value
+                    fpsCounterTime = fpsCounterTime + toc(fpsTimer);
+                    if fpsCounterTime < 1
+                        fpsCount = fpsCount + 1;
+                    else
+                        app.FPSCheckBox.Text = sprintf('  FPS: %d/%d',fpsCount, app.AudioFPS.Value);
+                        fpsCount = 0;
+                        fpsCounterTime = 0;
+                    end
+                end
             end
         end
 
@@ -229,7 +394,7 @@ classdef chromaticArduino < matlab.apps.AppBase
 
         % Value changed function: AudioDevice
         function AudioDeviceValueChanged(app, ~)
-            app.audioReader = audioDeviceReader('Device',app.AudioDevice.Value);
+            app.audioReader = audioDeviceReader('Device',app.AudioDevice.Value,'SamplesPerFrame',round(44100 / app.AudioFPS.Value));
         end
 
         function lineLowMoving(app,source)
@@ -352,6 +517,24 @@ classdef chromaticArduino < matlab.apps.AppBase
             xPos = (((freq - 20)/(20000 - 20))*sliderWidth) + sliderPos - (blockWidth/2);
         end
 
+        function newValue = expGain(value, oldValue, alphaDecay, alphaRise)
+            %exponential decay function
+            if value > oldValue
+                alphaValue = alphaRise;
+            else
+                alphaValue = alphaDecay;
+            end
+            newValue = alphaValue .* value + (1 - alphaValue) .* oldValue;
+        end
+
+        function newValue = setMax(value,maxValue)
+            %Set upper limit to the value
+            if value > maxValue
+                newValue = maxValue;
+            else
+                newValue = value;
+            end
+        end
     end
 
     % Component initialization
@@ -717,7 +900,7 @@ classdef chromaticArduino < matlab.apps.AppBase
             app.GainLimit.ValueDisplayFormat = '%.7f';
             app.GainLimit.HorizontalAlignment = 'center';
             app.GainLimit.FontName = 'Microsoft JhengHei UI';
-            app.GainLimit.Tooltip = {'A lower limit to filter bank output gain. Better let it alone. '};
+            app.GainLimit.Tooltip = {'A lower limit to filter bank output gain. Better let it alone.'};
             app.GainLimit.Position = [223 280 114 22];
             app.GainLimit.Value = 5e-06;
 
@@ -737,53 +920,53 @@ classdef chromaticArduino < matlab.apps.AppBase
             app.VolTolerance.Position = [223 225 114 22];
             app.VolTolerance.Value = 1e-12;
 
-            % Create AplhaDecayAudioEditFieldLabel
-            app.AplhaDecayAudioEditFieldLabel = uilabel(app.PreferencesTab);
-            app.AplhaDecayAudioEditFieldLabel.FontName = 'Microsoft JhengHei UI';
-            app.AplhaDecayAudioEditFieldLabel.Position = [101 172 116 22];
-            app.AplhaDecayAudioEditFieldLabel.Text = 'Aplha Decay Audio:';
+            % Create AlphaDecayAudioEditFieldLabel
+            app.AlphaDecayAudioEditFieldLabel = uilabel(app.PreferencesTab);
+            app.AlphaDecayAudioEditFieldLabel.FontName = 'Microsoft JhengHei UI';
+            app.AlphaDecayAudioEditFieldLabel.Position = [101 172 116 22];
+            app.AlphaDecayAudioEditFieldLabel.Text = 'Alpha Decay Audio:';
 
-            % Create AplhaDecayAudio
-            app.AplhaDecayAudio = uieditfield(app.PreferencesTab, 'numeric');
-            app.AplhaDecayAudio.Limits = [0 1];
-            app.AplhaDecayAudio.ValueDisplayFormat = '%.3f';
-            app.AplhaDecayAudio.HorizontalAlignment = 'center';
-            app.AplhaDecayAudio.FontName = 'Microsoft JhengHei UI';
-            app.AplhaDecayAudio.Tooltip = {'Small rise / decay factors = more smoothing'};
-            app.AplhaDecayAudio.Position = [223 170 114 22];
-            app.AplhaDecayAudio.Value = 0.1;
+            % Create AlphaDecayAudio
+            app.AlphaDecayAudio = uieditfield(app.PreferencesTab, 'numeric');
+            app.AlphaDecayAudio.Limits = [0 1];
+            app.AlphaDecayAudio.ValueDisplayFormat = '%.3f';
+            app.AlphaDecayAudio.HorizontalAlignment = 'center';
+            app.AlphaDecayAudio.FontName = 'Microsoft JhengHei UI';
+            app.AlphaDecayAudio.Tooltip = {'Small rise / decay factors = more smoothing'};
+            app.AlphaDecayAudio.Position = [223 170 114 22];
+            app.AlphaDecayAudio.Value = 0.8;
 
-            % Create AplhaDecayGainEditFieldLabel
-            app.AplhaDecayGainEditFieldLabel = uilabel(app.PreferencesTab);
-            app.AplhaDecayGainEditFieldLabel.FontName = 'Microsoft JhengHei UI';
-            app.AplhaDecayGainEditFieldLabel.Position = [101 117 108 22];
-            app.AplhaDecayGainEditFieldLabel.Text = 'Aplha Decay Gain:';
+            % Create AlphaDecayGainEditFieldLabel
+            app.AlphaDecayGainEditFieldLabel = uilabel(app.PreferencesTab);
+            app.AlphaDecayGainEditFieldLabel.FontName = 'Microsoft JhengHei UI';
+            app.AlphaDecayGainEditFieldLabel.Position = [101 117 108 22];
+            app.AlphaDecayGainEditFieldLabel.Text = 'Alpha Decay Gain:';
 
-            % Create AplhaDecayGain
-            app.AplhaDecayGain = uieditfield(app.PreferencesTab, 'numeric');
-            app.AplhaDecayGain.Limits = [0 1];
-            app.AplhaDecayGain.ValueDisplayFormat = '%.3f';
-            app.AplhaDecayGain.HorizontalAlignment = 'center';
-            app.AplhaDecayGain.FontName = 'Microsoft JhengHei UI';
-            app.AplhaDecayGain.Tooltip = {'Small rise / decay factors = more smoothing'};
-            app.AplhaDecayGain.Position = [223 115 114 22];
-            app.AplhaDecayGain.Value = 0.1;
+            % Create AlphaDecayGain
+            app.AlphaDecayGain = uieditfield(app.PreferencesTab, 'numeric');
+            app.AlphaDecayGain.Limits = [0 1];
+            app.AlphaDecayGain.ValueDisplayFormat = '%.3f';
+            app.AlphaDecayGain.HorizontalAlignment = 'center';
+            app.AlphaDecayGain.FontName = 'Microsoft JhengHei UI';
+            app.AlphaDecayGain.Tooltip = {'Small rise / decay factors = more smoothing'};
+            app.AlphaDecayGain.Position = [223 115 114 22];
+            app.AlphaDecayGain.Value = 0.1;
 
-            % Create AplhaDecayLEDEditFieldLabel
-            app.AplhaDecayLEDEditFieldLabel = uilabel(app.PreferencesTab);
-            app.AplhaDecayLEDEditFieldLabel.FontName = 'Microsoft JhengHei UI';
-            app.AplhaDecayLEDEditFieldLabel.Position = [101 62 103 22];
-            app.AplhaDecayLEDEditFieldLabel.Text = 'Aplha Decay LED:';
+            % Create AlphaDecayLEDEditFieldLabel
+            app.AlphaDecayLEDEditFieldLabel = uilabel(app.PreferencesTab);
+            app.AlphaDecayLEDEditFieldLabel.FontName = 'Microsoft JhengHei UI';
+            app.AlphaDecayLEDEditFieldLabel.Position = [101 62 103 22];
+            app.AlphaDecayLEDEditFieldLabel.Text = 'Alpha Decay LED:';
 
-            % Create AplhaDecayLED
-            app.AplhaDecayLED = uieditfield(app.PreferencesTab, 'numeric');
-            app.AplhaDecayLED.Limits = [0 1];
-            app.AplhaDecayLED.ValueDisplayFormat = '%.3f';
-            app.AplhaDecayLED.HorizontalAlignment = 'center';
-            app.AplhaDecayLED.FontName = 'Microsoft JhengHei UI';
-            app.AplhaDecayLED.Tooltip = {'Small rise / decay factors = more smoothing'};
-            app.AplhaDecayLED.Position = [223 60 114 22];
-            app.AplhaDecayLED.Value = 0.5;
+            % Create AlphaDecayLED
+            app.AlphaDecayLED = uieditfield(app.PreferencesTab, 'numeric');
+            app.AlphaDecayLED.Limits = [0 1];
+            app.AlphaDecayLED.ValueDisplayFormat = '%.3f';
+            app.AlphaDecayLED.HorizontalAlignment = 'center';
+            app.AlphaDecayLED.FontName = 'Microsoft JhengHei UI';
+            app.AlphaDecayLED.Tooltip = {'Small rise / decay factors = more smoothing'};
+            app.AlphaDecayLED.Position = [223 60 114 22];
+            app.AlphaDecayLED.Value = 0.5;
 
             % Create MinFrequencyEditFieldLabel
             app.MinFrequencyEditFieldLabel = uilabel(app.PreferencesTab);
@@ -861,53 +1044,53 @@ classdef chromaticArduino < matlab.apps.AppBase
             app.MaxFrequency.Position = [576 224 114 22];
             app.MaxFrequency.Value = 16000;
 
-            % Create AplhaRiseAudioEditFieldLabel
-            app.AplhaRiseAudioEditFieldLabel = uilabel(app.PreferencesTab);
-            app.AplhaRiseAudioEditFieldLabel.FontName = 'Microsoft JhengHei UI';
-            app.AplhaRiseAudioEditFieldLabel.Position = [454 171 104 22];
-            app.AplhaRiseAudioEditFieldLabel.Text = 'Aplha Rise Audio:';
+            % Create AlphaRiseAudioEditFieldLabel
+            app.AlphaRiseAudioEditFieldLabel = uilabel(app.PreferencesTab);
+            app.AlphaRiseAudioEditFieldLabel.FontName = 'Microsoft JhengHei UI';
+            app.AlphaRiseAudioEditFieldLabel.Position = [454 171 104 22];
+            app.AlphaRiseAudioEditFieldLabel.Text = 'Alpha Rise Audio:';
 
-            % Create AplhaRiseAudio
-            app.AplhaRiseAudio = uieditfield(app.PreferencesTab, 'numeric');
-            app.AplhaRiseAudio.Limits = [0 1];
-            app.AplhaRiseAudio.ValueDisplayFormat = '%.3f';
-            app.AplhaRiseAudio.HorizontalAlignment = 'center';
-            app.AplhaRiseAudio.FontName = 'Microsoft JhengHei UI';
-            app.AplhaRiseAudio.Tooltip = {'Small rise / decay factors = more smoothing'};
-            app.AplhaRiseAudio.Position = [576 169 114 22];
-            app.AplhaRiseAudio.Value = 0.92;
+            % Create AlphaRiseAudio
+            app.AlphaRiseAudio = uieditfield(app.PreferencesTab, 'numeric');
+            app.AlphaRiseAudio.Limits = [0 1];
+            app.AlphaRiseAudio.ValueDisplayFormat = '%.3f';
+            app.AlphaRiseAudio.HorizontalAlignment = 'center';
+            app.AlphaRiseAudio.FontName = 'Microsoft JhengHei UI';
+            app.AlphaRiseAudio.Tooltip = {'Small rise / decay factors = more smoothing'};
+            app.AlphaRiseAudio.Position = [576 169 114 22];
+            app.AlphaRiseAudio.Value = 0.92;
 
-            % Create AplhaRiseGainEditFieldLabel
-            app.AplhaRiseGainEditFieldLabel = uilabel(app.PreferencesTab);
-            app.AplhaRiseGainEditFieldLabel.FontName = 'Microsoft JhengHei UI';
-            app.AplhaRiseGainEditFieldLabel.Position = [454 116 96 22];
-            app.AplhaRiseGainEditFieldLabel.Text = 'Aplha Rise Gain:';
+            % Create AlphaRiseGainEditFieldLabel
+            app.AlphaRiseGainEditFieldLabel = uilabel(app.PreferencesTab);
+            app.AlphaRiseGainEditFieldLabel.FontName = 'Microsoft JhengHei UI';
+            app.AlphaRiseGainEditFieldLabel.Position = [454 116 96 22];
+            app.AlphaRiseGainEditFieldLabel.Text = 'Alpha Rise Gain:';
 
-            % Create AplhaRiseGain
-            app.AplhaRiseGain = uieditfield(app.PreferencesTab, 'numeric');
-            app.AplhaRiseGain.Limits = [0 1];
-            app.AplhaRiseGain.ValueDisplayFormat = '%.3f';
-            app.AplhaRiseGain.HorizontalAlignment = 'center';
-            app.AplhaRiseGain.FontName = 'Microsoft JhengHei UI';
-            app.AplhaRiseGain.Tooltip = {'Small rise / decay factors = more smoothing'};
-            app.AplhaRiseGain.Position = [576 114 114 22];
-            app.AplhaRiseGain.Value = 0.95;
+            % Create AlphaRiseGain
+            app.AlphaRiseGain = uieditfield(app.PreferencesTab, 'numeric');
+            app.AlphaRiseGain.Limits = [0 1];
+            app.AlphaRiseGain.ValueDisplayFormat = '%.3f';
+            app.AlphaRiseGain.HorizontalAlignment = 'center';
+            app.AlphaRiseGain.FontName = 'Microsoft JhengHei UI';
+            app.AlphaRiseGain.Tooltip = {'Small rise / decay factors = more smoothing'};
+            app.AlphaRiseGain.Position = [576 114 114 22];
+            app.AlphaRiseGain.Value = 0.95;
 
-            % Create AplhaRiseLEDEditFieldLabel
-            app.AplhaRiseLEDEditFieldLabel = uilabel(app.PreferencesTab);
-            app.AplhaRiseLEDEditFieldLabel.FontName = 'Microsoft JhengHei UI';
-            app.AplhaRiseLEDEditFieldLabel.Position = [454 61 92 22];
-            app.AplhaRiseLEDEditFieldLabel.Text = 'Aplha Rise LED:';
+            % Create AlphaRiseLEDEditFieldLabel
+            app.AlphaRiseLEDEditFieldLabel = uilabel(app.PreferencesTab);
+            app.AlphaRiseLEDEditFieldLabel.FontName = 'Microsoft JhengHei UI';
+            app.AlphaRiseLEDEditFieldLabel.Position = [454 61 92 22];
+            app.AlphaRiseLEDEditFieldLabel.Text = 'Alpha Rise LED:';
 
-            % Create AplhaRiseLED
-            app.AplhaRiseLED = uieditfield(app.PreferencesTab, 'numeric');
-            app.AplhaRiseLED.Limits = [0 1];
-            app.AplhaRiseLED.ValueDisplayFormat = '%.3f';
-            app.AplhaRiseLED.HorizontalAlignment = 'center';
-            app.AplhaRiseLED.FontName = 'Microsoft JhengHei UI';
-            app.AplhaRiseLED.Tooltip = {'Small rise / decay factors = more smoothing'};
-            app.AplhaRiseLED.Position = [576 59 114 22];
-            app.AplhaRiseLED.Value = 0.9;
+            % Create AlphaRiseLED
+            app.AlphaRiseLED = uieditfield(app.PreferencesTab, 'numeric');
+            app.AlphaRiseLED.Limits = [0 1];
+            app.AlphaRiseLED.ValueDisplayFormat = '%.3f';
+            app.AlphaRiseLED.HorizontalAlignment = 'center';
+            app.AlphaRiseLED.FontName = 'Microsoft JhengHei UI';
+            app.AlphaRiseLED.Tooltip = {'Small rise / decay factors = more smoothing'};
+            app.AlphaRiseLED.Position = [576 59 114 22];
+            app.AlphaRiseLED.Value = 0.9;
 
             % Create AboutTab
             app.AboutTab = uitab(app.TabGroup);
