@@ -57,7 +57,7 @@ classdef chromaticArduino < matlab.apps.AppBase
         AudioDevice                    matlab.ui.control.DropDown
         StartButton                    matlab.ui.control.StateButton
         PreferencesTab                 matlab.ui.container.Tab
-        AudioFPSEditFieldLabel         matlab.ui.control.Label
+        TargetFPSLabel                 matlab.ui.control.Label
         AudioFPS                       matlab.ui.control.NumericEditField
         NoofFFTbandsEditFieldLabel     matlab.ui.control.Label
         NoofFFTbands                   matlab.ui.control.NumericEditField
@@ -73,9 +73,9 @@ classdef chromaticArduino < matlab.apps.AppBase
         AplhaDecayLED                  matlab.ui.control.NumericEditField
         MinFrequencyEditFieldLabel     matlab.ui.control.Label
         MinFrequency                   matlab.ui.control.NumericEditField
-        LeftFrequencyEditFieldLabel    matlab.ui.control.Label
+        LowFrequencyLabel              matlab.ui.control.Label
         LeftFrequency                  matlab.ui.control.NumericEditField
-        RightFrequencyEditFieldLabel   matlab.ui.control.Label
+        HighFrequencyLabel             matlab.ui.control.Label
         RightFrequency                 matlab.ui.control.NumericEditField
         MaxFrequencyEditFieldLabel     matlab.ui.control.Label
         MaxFrequency                   matlab.ui.control.NumericEditField
@@ -102,6 +102,24 @@ classdef chromaticArduino < matlab.apps.AppBase
         lineHigh;
         ledAxis;
         lineBright;
+        redCtrlAxis;
+        redCtrl;
+        blueCtrlAxis;
+        blueCtrl;
+        greenCtrlAxis;
+        greenCtrl;
+        speedCtrlAxis;
+        speedCtrl;
+
+        prevMinFreq;
+        prevLeftFreq;
+        prevRightFreq;
+        prevMaxFreq;
+
+        prevRedPin;
+        prevBluePin;
+        prevGreenPin;
+
     end
 
     % Callbacks that handle component events
@@ -119,7 +137,7 @@ classdef chromaticArduino < matlab.apps.AppBase
         end
 
         % Menu selected function: SavePreferences, SaveSettings
-        function SavePreferencesMenuSelected(app, event)
+        function SavePreferencesMenuSelected(app, ~)
 %             jsonStr = jsonencode(app);
 %             fid = fopen('testingJson.json', 'w');
 %             if fid == -1, error('Cannot create JSON file'); end
@@ -128,26 +146,92 @@ classdef chromaticArduino < matlab.apps.AppBase
         end
 
         % Menu selected function: EnablePlot
-        function EnablePlotMenuSelected(app, event)
+        function EnablePlotMenuSelected(app, ~)
             
         end
 
         % Value changed function: StartButton
-        function StartButtonValueChanged(app, event)
-            value = app.StartButton.Value;
+        function StartButtonValueChanged(app, ~)
+            if app.StartButton.Value
+                
+            else
+                disp('loopStopped');
+            end
             
+            while app.StartButton.Value
+                pause(0.01)
+                disp('loop');
+            end
         end
 
         % Value changed function: ColorOrder
-        function ColorOrderValueChanged(app, event)
+        function ColorOrderValueChanged(app, ~)
             app.lineLow.Color = app.ColorOrder.Value(1);
             app.lineMid.Color = app.ColorOrder.Value(2);
             app.lineHigh.Color = app.ColorOrder.Value(3);
+            drawnow;
+        end
+
+        % Value changed function: LeftFrequency, MaxFrequency, 
+        % MinFrequency, RightFrequency
+        function FrequencyValueChanged(app, event)
+            fprintf('%s,%d',event.Source.Tag,event.PreviousValue);
+            % if app.MinFrequency.Value > app.LeftFrequency.Value
+            %     app.MinFrequency.Value = app.prevMinFreq;
+            % else
+            % end
+            app.lineLow.Position(1,1) = app.MinFrequency.Value;
+            app.lineLow.Position(2,1) = app.LeftFrequency.Value;
+            lineLowMoving(app,app.lineLow);
+
+            app.lineMid.Position(1,1) = app.LeftFrequency.Value;
+            app.lineMid.Position(2,1) = app.RightFrequency.Value;
+            lineMidMoving(app,app.lineMid);
+
+            app.lineHigh.Position(1,1) = app.RightFrequency.Value;
+            app.lineHigh.Position(2,1) = app.MaxFrequency.Value;
+            lineHighMoving(app,app.lineHigh);
+        end
+
+        % Value changed function: BluePin, GreenPin, RedPin
+        function LEDPinValueChanged(app, event)
+            value = app.RedPin.Value;
+            fprintf('%s,%s',event.Source.Tag, event.PreviousValue)
+        end
+
+        % Selection changed function: ModeGroup
+        function ModeSelectionChanged(app, ~)
+            selectedButton = app.ModeGroup.SelectedObject;
+            if isequal(selectedButton.Text, 'Audio')
+                app.FreqPlot.Visible = 'on';
+                app.ColorControl.Visible = 'off';
+                app.lineLow.InteractionsAllowed = 'all';
+                app.lineMid.InteractionsAllowed = 'all';
+                app.lineHigh.InteractionsAllowed = 'all';
+            elseif isequal(selectedButton.Text, 'Rainbow')
+                app.FreqPlot.Visible = 'off';
+                app.ColorControl.Visible = 'on';
+                app.lineLow.InteractionsAllowed = 'none';
+                app.lineMid.InteractionsAllowed = 'none';
+                app.lineHigh.InteractionsAllowed = 'none';
+            else
+                app.FreqPlot.Visible = 'off';
+                app.ColorControl.Visible = 'on';
+                app.lineLow.InteractionsAllowed = 'none';
+                app.lineMid.InteractionsAllowed = 'none';
+                app.lineHigh.InteractionsAllowed = 'none';
+            end
+            drawnow;
         end
 
         function lineLowMoving(app,source)
             source.Position(1,2) = 0;
             source.Position(2,2) = 0;
+
+            % Stopping before minFreq is crossed
+            if source.Position(1,1) > source.Position(2,1)
+                source.Position(1,1) = source.Position(2,1) - 200;  
+            end
 
             app.lineMid.Position(1,1) = source.Position(2,1);
             app.minFreq.Position(1) = app.getPosition(source.Position(1,1),app.FreqSlider.Position(1),...
@@ -164,6 +248,16 @@ classdef chromaticArduino < matlab.apps.AppBase
         function lineMidMoving(app,source)
             source.Position(1,2) = 0;
             source.Position(2,2) = 0;
+
+            % Stopping before leftFreq is higher than rightFreq
+            if source.Position(1,1) > source.Position(2,1)
+                source.Position(1,1) = source.Position(2,1) - 200;  
+            end
+
+            % Stopping before minFreq is crossed 
+            if app.lineLow.Position(1,1) > source.Position(1,1)
+                source.Position(1,1) = app.lineLow.Position(1,1) + 200;  
+            end
 
             app.lineLow.Position(2,1) = source.Position(1,1);
 
@@ -183,6 +277,18 @@ classdef chromaticArduino < matlab.apps.AppBase
             source.Position(1,2) = 0;
             source.Position(2,2) = 0;
 
+            % Stopping before maxFreq or rightFreq are crossed 
+            if (source.Position(1,1) > source.Position(2,1)) && (source.Position(1,1) > app.lineMid.Position(2,1))
+                source.Position(1,1) = source.Position(2,1) - 200;
+            elseif source.Position(2,1) < source.Position(1,1)
+                source.Position(2,1) = source.Position(1,1) + 200;   
+            end
+
+            % Stopping before rightFreq is crossed 
+            if app.lineMid.Position(1,1) > source.Position(1,1)
+                source.Position(1,1) = app.lineMid.Position(1,1) + 200;  
+            end
+
             app.rightFreq.Position(1) = app.getPosition(source.Position(1,1),app.FreqSlider.Position(1),...
                                                         app.FreqSlider.Position(3),app.rightFreq.Position(3));
             app.rightFreq.Text = num2str(round(source.Position(1,1)));
@@ -196,6 +302,30 @@ classdef chromaticArduino < matlab.apps.AppBase
         end
 
         function lineBrightMoving(~,source)
+            source.Position(1,1) = 0;
+            source.Position(1,2) = 0;
+            source.Position(2,2) = 0;
+        end
+
+        function lineRedMoving(~,source)
+            source.Position(1,1) = 0;
+            source.Position(1,2) = 0;
+            source.Position(2,2) = 0;
+        end
+
+        function lineGreenMoving(~,source)
+            source.Position(1,1) = 0;
+            source.Position(1,2) = 0;
+            source.Position(2,2) = 0;
+        end
+
+        function lineBlueMoving(~,source)
+            source.Position(1,1) = 0;
+            source.Position(1,2) = 0;
+            source.Position(2,2) = 0;
+        end
+
+        function lineSpeedMoving(~,source)
             source.Position(1,1) = 0;
             source.Position(1,2) = 0;
             source.Position(2,2) = 0;
@@ -252,6 +382,7 @@ classdef chromaticArduino < matlab.apps.AppBase
 
             % Create ModeGroup
             app.ModeGroup = uibuttongroup(app.Panel);
+            app.ModeGroup.SelectionChangedFcn = createCallbackFcn(app, @ModeSelectionChanged, true);
             app.ModeGroup.Tooltip = {'Select display mode'};
             app.ModeGroup.BorderType = 'none';
             app.ModeGroup.FontName = 'Microsoft JhengHei UI';
@@ -278,10 +409,10 @@ classdef chromaticArduino < matlab.apps.AppBase
 
             % Create FreqSlider
             app.FreqSlider = uislider(app.Panel);
-            app.FreqSlider.Visible = 'off';
             app.FreqSlider.Enable = 'off';
+            app.FreqSlider.Visible = 'off';
             app.FreqSlider.Tooltip = {'Select Frequency Ranges for Audio Analysis'};
-            app.FreqSlider.Position = [33 54 714 3];
+            app.FreqSlider.Position = [33 59 714 3];
 
             % Create FreqPlot
             app.FreqPlot = uiaxes(app.Panel);
@@ -309,10 +440,11 @@ classdef chromaticArduino < matlab.apps.AppBase
 
             % Create ColorOrder
             app.ColorOrder = uidropdown(app.Panel);
-            app.ColorOrder.Items = {'RRR', 'RRG', 'RRB', 'RGR', 'RGG', 'RGB', 'RBR', 'RBG','RBB',...
-                                    'GRR', 'GRG', 'GRB', 'GGR', 'GGG', 'GGB', 'GBR','GBG', 'GBB',...
-                                     'BRR', 'BRG', 'BRB', 'BGR', 'BGG', 'BGB', 'BBR', 'BBG', 'BBB'};
+            app.ColorOrder.Items = {'RRR', 'RRG', 'RRB', 'RGR', 'RGG', 'RGB', 'RBR', 'RBG', 'RBB',...
+                                    'GRR', 'GRG', 'GRB', 'GGR', 'GGG', 'GGB', 'GBR', 'GBG', 'GBB',...
+                                    'BRR', 'BRG', 'BRB', 'BGR', 'BGG', 'BGB', 'BBR', 'BBG', 'BBB'};
             app.ColorOrder.ValueChangedFcn = createCallbackFcn(app, @ColorOrderValueChanged, true);
+            app.ColorOrder.Tooltip = {'Select the color order for low, mid and high frequency ranges'};
             app.ColorOrder.FontName = 'Microsoft JhengHei UI';
             app.ColorOrder.Position = [246 170 63 22];
             app.ColorOrder.Value = 'BGR';
@@ -328,8 +460,8 @@ classdef chromaticArduino < matlab.apps.AppBase
             app.LEDSlider = uislider(app.Panel);
             app.LEDSlider.MajorTicks = [0 20 40 60 80 100];
             app.LEDSlider.MajorTickLabels = {'0', '20', '40', '60', '80', '100'};
-            app.LEDSlider.Visible = 'off';
             app.LEDSlider.Enable = 'off';
+            app.LEDSlider.Visible = 'off';
             app.LEDSlider.Tooltip = {'LED Brightness'};
             app.LEDSlider.FontName = 'Microsoft JhengHei UI';
             app.LEDSlider.Position = [441 180 181 3];
@@ -345,28 +477,28 @@ classdef chromaticArduino < matlab.apps.AppBase
             app.minFreq = uilabel(app.Panel);
             app.minFreq.HorizontalAlignment = 'center';
             app.minFreq.FontName = 'Microsoft JhengHei UI';
-            app.minFreq.Position = [-3 67 72 22];
+            app.minFreq.Position = [-3 72 72 22];
             app.minFreq.Text = '20';
 
             % Create leftFreq
             app.leftFreq = uilabel(app.Panel);
             app.leftFreq.HorizontalAlignment = 'center';
             app.leftFreq.FontName = 'Microsoft JhengHei UI';
-            app.leftFreq.Position = [91 67 72 22];
+            app.leftFreq.Position = [91 72 72 22];
             app.leftFreq.Text = '1500';
 
             % Create rightFreq
             app.rightFreq = uilabel(app.Panel);
             app.rightFreq.HorizontalAlignment = 'center';
             app.rightFreq.FontName = 'Microsoft JhengHei UI';
-            app.rightFreq.Position = [236 67 72 22];
+            app.rightFreq.Position = [236 72 72 22];
             app.rightFreq.Text = '6000';
 
             % Create maxFreq
             app.maxFreq = uilabel(app.Panel);
             app.maxFreq.HorizontalAlignment = 'center';
             app.maxFreq.FontName = 'Microsoft JhengHei UI';
-            app.maxFreq.Position = [399 67 72 22];
+            app.maxFreq.Position = [399 72 72 22];
             app.maxFreq.Text = '16000';
 
             % Create FreqLabel
@@ -392,7 +524,7 @@ classdef chromaticArduino < matlab.apps.AppBase
             app.RedSlider = uislider(app.ColorControl);
             app.RedSlider.Visible = 'off';
             app.RedSlider.FontName = 'Microsoft JhengHei UI';
-            app.RedSlider.Position = [87 146 422 3];
+            app.RedSlider.Position = [87 147 422 3];
 
             % Create GreenSliderLabel
             app.GreenSliderLabel = uilabel(app.ColorControl);
@@ -405,7 +537,7 @@ classdef chromaticArduino < matlab.apps.AppBase
             app.GreenSlider = uislider(app.ColorControl);
             app.GreenSlider.Visible = 'off';
             app.GreenSlider.FontName = 'Microsoft JhengHei UI';
-            app.GreenSlider.Position = [87 109 422 3];
+            app.GreenSlider.Position = [87 110 422 3];
 
             % Create BlueSliderLabel
             app.BlueSliderLabel = uilabel(app.ColorControl);
@@ -418,7 +550,7 @@ classdef chromaticArduino < matlab.apps.AppBase
             app.BlueSlider = uislider(app.ColorControl);
             app.BlueSlider.Visible = 'off';
             app.BlueSlider.FontName = 'Microsoft JhengHei UI';
-            app.BlueSlider.Position = [87 71 422 3];
+            app.BlueSlider.Position = [87 72 422 3];
 
             % Create SpeedSliderLabel
             app.SpeedSliderLabel = uilabel(app.ColorControl);
@@ -430,22 +562,34 @@ classdef chromaticArduino < matlab.apps.AppBase
             % Create SpeedSlider
             app.SpeedSlider = uislider(app.ColorControl);
             app.SpeedSlider.Visible = 'off';
+            app.SpeedSlider.Tooltip = {'Color cycle speed'};
             app.SpeedSlider.FontName = 'Microsoft JhengHei UI';
-            app.SpeedSlider.Position = [144 34 320 3];
+            app.SpeedSlider.Position = [144 35 320 3];
 
             % Create RedDropDownLabel
             app.RedDropDownLabel = uilabel(app.ControlTab);
             app.RedDropDownLabel.HorizontalAlignment = 'right';
             app.RedDropDownLabel.VerticalAlignment = 'top';
             app.RedDropDownLabel.FontName = 'Microsoft JhengHei UI';
-            app.RedDropDownLabel.Tooltip = {'Select PWM pins for colors'};
+            app.RedDropDownLabel.Tooltip = {''};
+            app.RedDropDownLabel.Position = [448 434 30 22];
+            app.RedDropDownLabel.Text = 'Red:';
+
+            % Create RedDropDownLabel
+            app.RedDropDownLabel = uilabel(app.ControlTab);
+            app.RedDropDownLabel.HorizontalAlignment = 'right';
+            app.RedDropDownLabel.VerticalAlignment = 'top';
+            app.RedDropDownLabel.FontName = 'Microsoft JhengHei UI';
+            app.RedDropDownLabel.Tooltip = {''};
             app.RedDropDownLabel.Position = [448 434 30 22];
             app.RedDropDownLabel.Text = 'Red:';
 
             % Create RedPin
             app.RedPin = uidropdown(app.ControlTab);
             app.RedPin.Items = {'D3', 'D5', 'D6', 'D9', 'D10', 'D11'};
-            app.RedPin.Tooltip = {'Select PWM pins for colors'};
+            app.RedPin.ValueChangedFcn = createCallbackFcn(app, @LEDPinValueChanged, true);
+            app.RedPin.Tag = 'redPin';
+            app.RedPin.Tooltip = {'Select PWM pin of red LED'};
             app.RedPin.FontName = 'Microsoft JhengHei UI';
             app.RedPin.Position = [486 435 55 22];
             app.RedPin.Value = 'D9';
@@ -455,14 +599,16 @@ classdef chromaticArduino < matlab.apps.AppBase
             app.GreenDropDownLabel.HorizontalAlignment = 'right';
             app.GreenDropDownLabel.VerticalAlignment = 'top';
             app.GreenDropDownLabel.FontName = 'Microsoft JhengHei UI';
-            app.GreenDropDownLabel.Tooltip = {'Select PWM pins for colors'};
+            app.GreenDropDownLabel.Tooltip = {''};
             app.GreenDropDownLabel.Position = [554 434 42 22];
             app.GreenDropDownLabel.Text = 'Green:';
 
             % Create GreenPin
             app.GreenPin = uidropdown(app.ControlTab);
             app.GreenPin.Items = {'D3', 'D5', 'D6', 'D9', 'D10', 'D11'};
-            app.GreenPin.Tooltip = {'Select PWM pins for colors'};
+            app.GreenPin.ValueChangedFcn = createCallbackFcn(app, @LEDPinValueChanged, true);
+            app.GreenPin.Tag = 'greenPin';
+            app.GreenPin.Tooltip = {'Select PWM pin of green LED'};
             app.GreenPin.FontName = 'Microsoft JhengHei UI';
             app.GreenPin.Position = [604 435 55 22];
             app.GreenPin.Value = 'D10';
@@ -472,14 +618,16 @@ classdef chromaticArduino < matlab.apps.AppBase
             app.BlueDropDownLabel.HorizontalAlignment = 'right';
             app.BlueDropDownLabel.VerticalAlignment = 'top';
             app.BlueDropDownLabel.FontName = 'Microsoft JhengHei UI';
-            app.BlueDropDownLabel.Tooltip = {'Select PWM pins for colors'};
+            app.BlueDropDownLabel.Tooltip = {''};
             app.BlueDropDownLabel.Position = [671 434 33 22];
             app.BlueDropDownLabel.Text = 'Blue:';
 
             % Create BluePin
             app.BluePin = uidropdown(app.ControlTab);
             app.BluePin.Items = {'D3', 'D5', 'D6', 'D9', 'D10', 'D11'};
-            app.BluePin.Tooltip = {'Select PWM pins for colors'};
+            app.BluePin.ValueChangedFcn = createCallbackFcn(app, @LEDPinValueChanged, true);
+            app.BluePin.Tag = 'bluePin';
+            app.BluePin.Tooltip = {'Select PWM pin of blue LED'};
             app.BluePin.FontName = 'Microsoft JhengHei UI';
             app.BluePin.Position = [712 435 55 22];
             app.BluePin.Value = 'D11';
@@ -495,6 +643,7 @@ classdef chromaticArduino < matlab.apps.AppBase
             % Create AudioDevice
             app.AudioDevice = uidropdown(app.ControlTab);
             app.AudioDevice.Items = {'Default'};
+            app.AudioDevice.Tooltip = {'Audio source for analysis'};
             app.AudioDevice.FontName = 'Microsoft JhengHei UI';
             app.AudioDevice.Position = [262 434 153 22];
             app.AudioDevice.Value = 'Default';
@@ -502,6 +651,7 @@ classdef chromaticArduino < matlab.apps.AppBase
             % Create StartButton
             app.StartButton = uibutton(app.ControlTab, 'state');
             app.StartButton.ValueChangedFcn = createCallbackFcn(app, @StartButtonValueChanged, true);
+            app.StartButton.Tooltip = {'Start controlling arduino'};
             app.StartButton.IconAlignment = 'center';
             app.StartButton.Text = 'Start';
             app.StartButton.BackgroundColor = [0 0.902 0];
@@ -512,11 +662,11 @@ classdef chromaticArduino < matlab.apps.AppBase
             app.PreferencesTab = uitab(app.TabGroup);
             app.PreferencesTab.Title = 'Preferences';
 
-            % Create AudioFPSEditFieldLabel
-            app.AudioFPSEditFieldLabel = uilabel(app.PreferencesTab);
-            app.AudioFPSEditFieldLabel.FontName = 'Microsoft JhengHei UI';
-            app.AudioFPSEditFieldLabel.Position = [101 394 106 22];
-            app.AudioFPSEditFieldLabel.Text = 'Audio FPS:';
+            % Create TargetFPSLabel
+            app.TargetFPSLabel = uilabel(app.PreferencesTab);
+            app.TargetFPSLabel.FontName = 'Microsoft JhengHei UI';
+            app.TargetFPSLabel.Position = [101 394 106 22];
+            app.TargetFPSLabel.Text = 'Target FPS:';
 
             % Create AudioFPS
             app.AudioFPS = uieditfield(app.PreferencesTab, 'numeric');
@@ -525,6 +675,7 @@ classdef chromaticArduino < matlab.apps.AppBase
             app.AudioFPS.ValueDisplayFormat = '%.0f';
             app.AudioFPS.HorizontalAlignment = 'center';
             app.AudioFPS.FontName = 'Microsoft JhengHei UI';
+            app.AudioFPS.Tooltip = {'Target FPS to drive LEDs in audio mode.'};
             app.AudioFPS.Position = [223 392 114 22];
             app.AudioFPS.Value = 60;
 
@@ -541,6 +692,7 @@ classdef chromaticArduino < matlab.apps.AppBase
             app.NoofFFTbands.ValueDisplayFormat = '%.0f';
             app.NoofFFTbands.HorizontalAlignment = 'center';
             app.NoofFFTbands.FontName = 'Microsoft JhengHei UI';
+            app.NoofFFTbands.Tooltip = {'Number of frequency bins to use when transforming audio to frequency domain'};
             app.NoofFFTbands.Position = [223 336 114 22];
             app.NoofFFTbands.Value = 24;
 
@@ -552,10 +704,11 @@ classdef chromaticArduino < matlab.apps.AppBase
 
             % Create GainLimit
             app.GainLimit = uieditfield(app.PreferencesTab, 'numeric');
-            app.GainLimit.Limits = [0 Inf];
+            app.GainLimit.Limits = [0 1];
             app.GainLimit.ValueDisplayFormat = '%.7f';
             app.GainLimit.HorizontalAlignment = 'center';
             app.GainLimit.FontName = 'Microsoft JhengHei UI';
+            app.GainLimit.Tooltip = {'A lower limit to filter bank output gain. Better let it alone. '};
             app.GainLimit.Position = [223 280 114 22];
             app.GainLimit.Value = 5e-06;
 
@@ -567,10 +720,11 @@ classdef chromaticArduino < matlab.apps.AppBase
 
             % Create VolTolerance
             app.VolTolerance = uieditfield(app.PreferencesTab, 'numeric');
-            app.VolTolerance.Limits = [0 Inf];
+            app.VolTolerance.Limits = [0 1];
             app.VolTolerance.ValueDisplayFormat = '%.13f';
             app.VolTolerance.HorizontalAlignment = 'center';
             app.VolTolerance.FontName = 'Microsoft JhengHei UI';
+            app.VolTolerance.Tooltip = {'No music visualization displayed if recorded audio volume below threshold'};
             app.VolTolerance.Position = [223 225 114 22];
             app.VolTolerance.Value = 1e-12;
 
@@ -582,10 +736,11 @@ classdef chromaticArduino < matlab.apps.AppBase
 
             % Create AplhaDecayAudio
             app.AplhaDecayAudio = uieditfield(app.PreferencesTab, 'numeric');
-            app.AplhaDecayAudio.Limits = [0 Inf];
+            app.AplhaDecayAudio.Limits = [0 1];
             app.AplhaDecayAudio.ValueDisplayFormat = '%.3f';
             app.AplhaDecayAudio.HorizontalAlignment = 'center';
             app.AplhaDecayAudio.FontName = 'Microsoft JhengHei UI';
+            app.AplhaDecayAudio.Tooltip = {'Small rise / decay factors = more smoothing'};
             app.AplhaDecayAudio.Position = [223 170 114 22];
             app.AplhaDecayAudio.Value = 0.1;
 
@@ -597,10 +752,11 @@ classdef chromaticArduino < matlab.apps.AppBase
 
             % Create AplhaDecayGain
             app.AplhaDecayGain = uieditfield(app.PreferencesTab, 'numeric');
-            app.AplhaDecayGain.Limits = [0 Inf];
+            app.AplhaDecayGain.Limits = [0 1];
             app.AplhaDecayGain.ValueDisplayFormat = '%.3f';
             app.AplhaDecayGain.HorizontalAlignment = 'center';
             app.AplhaDecayGain.FontName = 'Microsoft JhengHei UI';
+            app.AplhaDecayGain.Tooltip = {'Small rise / decay factors = more smoothing'};
             app.AplhaDecayGain.Position = [223 115 114 22];
             app.AplhaDecayGain.Value = 0.1;
 
@@ -612,10 +768,11 @@ classdef chromaticArduino < matlab.apps.AppBase
 
             % Create AplhaDecayLED
             app.AplhaDecayLED = uieditfield(app.PreferencesTab, 'numeric');
-            app.AplhaDecayLED.Limits = [0 Inf];
+            app.AplhaDecayLED.Limits = [0 1];
             app.AplhaDecayLED.ValueDisplayFormat = '%.3f';
             app.AplhaDecayLED.HorizontalAlignment = 'center';
             app.AplhaDecayLED.FontName = 'Microsoft JhengHei UI';
+            app.AplhaDecayLED.Tooltip = {'Small rise / decay factors = more smoothing'};
             app.AplhaDecayLED.Position = [223 60 114 22];
             app.AplhaDecayLED.Value = 0.5;
 
@@ -627,43 +784,52 @@ classdef chromaticArduino < matlab.apps.AppBase
 
             % Create MinFrequency
             app.MinFrequency = uieditfield(app.PreferencesTab, 'numeric');
-            app.MinFrequency.Limits = [0 Inf];
+            app.MinFrequency.Limits = [20 20000];
             app.MinFrequency.RoundFractionalValues = 'on';
             app.MinFrequency.ValueDisplayFormat = '%.0f';
+            app.MinFrequency.ValueChangedFcn = createCallbackFcn(app, @FrequencyValueChanged, true);
+            app.MinFrequency.Tag = 'minFreq';
             app.MinFrequency.HorizontalAlignment = 'center';
             app.MinFrequency.FontName = 'Microsoft JhengHei UI';
+            app.MinFrequency.Tooltip = {'Frequencies below this value will be removed during audio processing'};
             app.MinFrequency.Position = [576 391 114 22];
             app.MinFrequency.Value = 50;
 
-            % Create LeftFrequencyEditFieldLabel
-            app.LeftFrequencyEditFieldLabel = uilabel(app.PreferencesTab);
-            app.LeftFrequencyEditFieldLabel.FontName = 'Microsoft JhengHei UI';
-            app.LeftFrequencyEditFieldLabel.Position = [454 337 123 22];
-            app.LeftFrequencyEditFieldLabel.Text = 'Left Frequency:';
+            % Create LowFrequencyLabel
+            app.LowFrequencyLabel = uilabel(app.PreferencesTab);
+            app.LowFrequencyLabel.FontName = 'Microsoft JhengHei UI';
+            app.LowFrequencyLabel.Position = [454 337 123 22];
+            app.LowFrequencyLabel.Text = 'Low Frequency:';
 
             % Create LeftFrequency
             app.LeftFrequency = uieditfield(app.PreferencesTab, 'numeric');
-            app.LeftFrequency.Limits = [0 Inf];
+            app.LeftFrequency.Limits = [20 20000];
             app.LeftFrequency.RoundFractionalValues = 'on';
             app.LeftFrequency.ValueDisplayFormat = '%.0f';
+            app.LeftFrequency.ValueChangedFcn = createCallbackFcn(app, @FrequencyValueChanged, true);
+            app.LeftFrequency.Tag = 'leftFreq';
             app.LeftFrequency.HorizontalAlignment = 'center';
             app.LeftFrequency.FontName = 'Microsoft JhengHei UI';
+            app.LeftFrequency.Tooltip = {'Upper limit for low frequency range'};
             app.LeftFrequency.Position = [576 335 114 22];
             app.LeftFrequency.Value = 1500;
 
-            % Create RightFrequencyEditFieldLabel
-            app.RightFrequencyEditFieldLabel = uilabel(app.PreferencesTab);
-            app.RightFrequencyEditFieldLabel.FontName = 'Microsoft JhengHei UI';
-            app.RightFrequencyEditFieldLabel.Position = [454 281 106 22];
-            app.RightFrequencyEditFieldLabel.Text = 'Right Frequency:';
+            % Create HighFrequencyLabel
+            app.HighFrequencyLabel = uilabel(app.PreferencesTab);
+            app.HighFrequencyLabel.FontName = 'Microsoft JhengHei UI';
+            app.HighFrequencyLabel.Position = [454 281 106 22];
+            app.HighFrequencyLabel.Text = 'High Frequency:';
 
             % Create RightFrequency
             app.RightFrequency = uieditfield(app.PreferencesTab, 'numeric');
-            app.RightFrequency.Limits = [0 Inf];
+            app.RightFrequency.Limits = [20 20000];
             app.RightFrequency.RoundFractionalValues = 'on';
             app.RightFrequency.ValueDisplayFormat = '%.0f';
+            app.RightFrequency.ValueChangedFcn = createCallbackFcn(app, @FrequencyValueChanged, true);
+            app.RightFrequency.Tag = 'rightFreq';
             app.RightFrequency.HorizontalAlignment = 'center';
             app.RightFrequency.FontName = 'Microsoft JhengHei UI';
+            app.RightFrequency.Tooltip = {'Lower limit for high frequncy range'};
             app.RightFrequency.Position = [576 279 114 22];
             app.RightFrequency.Value = 6000;
 
@@ -675,11 +841,14 @@ classdef chromaticArduino < matlab.apps.AppBase
 
             % Create MaxFrequency
             app.MaxFrequency = uieditfield(app.PreferencesTab, 'numeric');
-            app.MaxFrequency.Limits = [0 Inf];
+            app.MaxFrequency.Limits = [20 20000];
             app.MaxFrequency.RoundFractionalValues = 'on';
             app.MaxFrequency.ValueDisplayFormat = '%.0f';
+            app.MaxFrequency.ValueChangedFcn = createCallbackFcn(app, @FrequencyValueChanged, true);
+            app.MaxFrequency.Tag = 'maxFreq';
             app.MaxFrequency.HorizontalAlignment = 'center';
             app.MaxFrequency.FontName = 'Microsoft JhengHei UI';
+            app.MaxFrequency.Tooltip = {'Frequencies above this value will be removed during audio processing'};
             app.MaxFrequency.Position = [576 224 114 22];
             app.MaxFrequency.Value = 16000;
 
@@ -691,10 +860,11 @@ classdef chromaticArduino < matlab.apps.AppBase
 
             % Create AplhaRiseAudio
             app.AplhaRiseAudio = uieditfield(app.PreferencesTab, 'numeric');
-            app.AplhaRiseAudio.Limits = [0 Inf];
+            app.AplhaRiseAudio.Limits = [0 1];
             app.AplhaRiseAudio.ValueDisplayFormat = '%.3f';
             app.AplhaRiseAudio.HorizontalAlignment = 'center';
             app.AplhaRiseAudio.FontName = 'Microsoft JhengHei UI';
+            app.AplhaRiseAudio.Tooltip = {'Small rise / decay factors = more smoothing'};
             app.AplhaRiseAudio.Position = [576 169 114 22];
             app.AplhaRiseAudio.Value = 0.92;
 
@@ -706,10 +876,11 @@ classdef chromaticArduino < matlab.apps.AppBase
 
             % Create AplhaRiseGain
             app.AplhaRiseGain = uieditfield(app.PreferencesTab, 'numeric');
-            app.AplhaRiseGain.Limits = [0 Inf];
+            app.AplhaRiseGain.Limits = [0 1];
             app.AplhaRiseGain.ValueDisplayFormat = '%.3f';
             app.AplhaRiseGain.HorizontalAlignment = 'center';
             app.AplhaRiseGain.FontName = 'Microsoft JhengHei UI';
+            app.AplhaRiseGain.Tooltip = {'Small rise / decay factors = more smoothing'};
             app.AplhaRiseGain.Position = [576 114 114 22];
             app.AplhaRiseGain.Value = 0.95;
 
@@ -721,10 +892,11 @@ classdef chromaticArduino < matlab.apps.AppBase
 
             % Create AplhaRiseLED
             app.AplhaRiseLED = uieditfield(app.PreferencesTab, 'numeric');
-            app.AplhaRiseLED.Limits = [0 Inf];
+            app.AplhaRiseLED.Limits = [0 1];
             app.AplhaRiseLED.ValueDisplayFormat = '%.3f';
             app.AplhaRiseLED.HorizontalAlignment = 'center';
             app.AplhaRiseLED.FontName = 'Microsoft JhengHei UI';
+            app.AplhaRiseLED.Tooltip = {'Small rise / decay factors = more smoothing'};
             app.AplhaRiseLED.Position = [576 59 114 22];
             app.AplhaRiseLED.Value = 0.9;
 
@@ -781,19 +953,19 @@ classdef chromaticArduino < matlab.apps.AppBase
             app.freqAxis.Toolbar.Visible = 'off';
 
             % Add the line for low frequency band
-            app.lineLow = images.roi.Line(app.freqAxis,'Position',[app.MinFrequency.Value,0;app.LeftFrequency.Value,0],'Color',app.ColorOrder.Value(1));
+            app.lineLow = images.roi.Line(app.freqAxis,'Position',[app.MinFrequency.Value,0;app.LeftFrequency.Value,0],'Color',app.ColorOrder.Value(1),'Deletable',false);
             % Add a listener that will trigger a callback function titled "lineLowMoving" when user
             % moves the ROI endpoints or the line ROI as a whole
             addlistener(app.lineLow,'MovingROI',@(varargin)lineLowMoving(app,app.lineLow));
 
             % Add the line for mid frequency band
-            app.lineMid = images.roi.Line(app.freqAxis,'Position',[app.LeftFrequency.Value,0;app.RightFrequency.Value,0],'Color',app.ColorOrder.Value(2));
+            app.lineMid = images.roi.Line(app.freqAxis,'Position',[app.LeftFrequency.Value,0;app.RightFrequency.Value,0],'Color',app.ColorOrder.Value(2),'Deletable',false);
             % Add a listener that will trigger a callback function titled "lineMidMoving" when user
             % moves the ROI endpoints or the line ROI as a whole
             addlistener(app.lineMid,'MovingROI',@(varargin)lineMidMoving(app,app.lineMid));
 
             % Add the line for high frequency band
-            app.lineHigh = images.roi.Line(app.freqAxis,'Position',[app.RightFrequency.Value,0;app.MaxFrequency.Value,0],'Color',app.ColorOrder.Value(3));
+            app.lineHigh = images.roi.Line(app.freqAxis,'Position',[app.RightFrequency.Value,0;app.MaxFrequency.Value,0],'Color',app.ColorOrder.Value(3),'Deletable',false);
             % Add a listener that will trigger a callback function titled "lMoving" when user
             % moves the ROI endpoints or the line ROI as a whole
             addlistener(app.lineHigh,'MovingROI',@(varargin)lineHighMoving(app,app.lineHigh));
@@ -825,11 +997,79 @@ classdef chromaticArduino < matlab.apps.AppBase
             app.ledAxis.Toolbar.Visible = 'off';
 
             % Add the line for LED Brightness
-            app.lineBright = images.roi.Line(app.ledAxis,'Position',[0,0; 100,0],'Color','C');
+            app.lineBright = images.roi.Line(app.ledAxis,'Position',[0,0; 100,0],'Color','C','Deletable',false);
             % Add a listener that will trigger a callback function titled "lineLowMoving" when user
             % moves the ROI endpoints or the line ROI as a whole
             %addlistener(app.lineLow,'MovingROI',@(varargin)lineLowMoving(app,app.lineLow));
             addlistener(app.lineBright,'MovingROI',@(varargin)lineBrightMoving(app,app.lineBright));
+            % Show the figure after all components are created
+
+            % Creating axis for red slider control 
+            app.redCtrlAxis = axes(app.ColorControl,'Color','none','YColor','none','XLim',[0,255],'YTick',[], ...
+                    'XTick',[0:16:255 255],'TickDir','both','XMinorTick', ...
+                    'off','Units','pixels','Position',app.RedSlider.Position);
+             
+            % Disable the interactivity & toolbar visibility
+            disableDefaultInteractivity(app.redCtrlAxis);
+            app.redCtrlAxis.Toolbar.Visible = 'off';
+
+            % Add the line for red control
+            app.redCtrl = images.roi.Line(app.redCtrlAxis,'Position',[0,0; 255,0],'Color','R','Deletable',false);
+            % Add a listener that will trigger a callback function titled "lineLowMoving" when user
+            % moves the ROI endpoints or the line ROI as a whole
+            %addlistener(app.lineLow,'MovingROI',@(varargin)lineLowMoving(app,app.lineLow));
+            addlistener(app.redCtrl,'MovingROI',@(varargin)lineRedMoving(app,app.redCtrl));
+            % Show the figure after all components are created
+
+            % Creating axis for blue slider control 
+            app.blueCtrlAxis = axes(app.ColorControl,'Color','none','YColor','none','XLim',[0,255],'YTick',[], ...
+                    'XTick',[0:16:255 255],'TickDir','both','XMinorTick', ...
+                    'off','Units','pixels','Position',app.BlueSlider.Position);
+             
+            % Disable the interactivity & toolbar visibility
+            disableDefaultInteractivity(app.blueCtrlAxis);
+            app.blueCtrlAxis.Toolbar.Visible = 'off';
+
+            % Add the line for blue control
+            app.blueCtrl = images.roi.Line(app.blueCtrlAxis,'Position',[0,0; 255,0],'Color','B','Deletable',false);
+            % Add a listener that will trigger a callback function titled "lineLowMoving" when user
+            % moves the ROI endpoints or the line ROI as a whole
+            %addlistener(app.lineLow,'MovingROI',@(varargin)lineLowMoving(app,app.lineLow));
+            addlistener(app.blueCtrl,'MovingROI',@(varargin)lineBlueMoving(app,app.blueCtrl));
+            % Show the figure after all components are created
+
+            % Creating axis for green slider control 
+            app.greenCtrlAxis = axes(app.ColorControl,'Color','none','YColor','none','XLim',[0,255],'YTick',[], ...
+                    'XTick',[0:16:255 255],'TickDir','both','XMinorTick', ...
+                    'off','Units','pixels','Position',app.GreenSlider.Position);
+             
+            % Disable the interactivity & toolbar visibility
+            disableDefaultInteractivity(app.greenCtrlAxis);
+            app.greenCtrlAxis.Toolbar.Visible = 'off';
+
+            % Add the line for green control
+            app.greenCtrl = images.roi.Line(app.greenCtrlAxis,'Position',[0,0; 255,0],'Color','G','Deletable',false);
+            % Add a listener that will trigger a callback function titled "lineLowMoving" when user
+            % moves the ROI endpoints or the line ROI as a whole
+            %addlistener(app.lineLow,'MovingROI',@(varargin)lineLowMoving(app,app.lineLow));
+            addlistener(app.greenCtrl,'MovingROI',@(varargin)lineGreenMoving(app,app.greenCtrl));
+            % Show the figure after all components are created
+
+            % Creating axis for speed slider control 
+            app.speedCtrlAxis = axes(app.ColorControl,'Color','none','YColor','none','XLim',[0,100],'YTick',[], ...
+                    'XTick',0:10:100,'TickDir','both','XMinorTick', ...
+                    'off','Units','pixels','Position',app.SpeedSlider.Position);
+             
+            % Disable the interactivity & toolbar visibility
+            disableDefaultInteractivity(app.speedCtrlAxis);
+            app.speedCtrlAxis.Toolbar.Visible = 'off';
+
+            % Add the line for speed control
+            app.speedCtrl = images.roi.Line(app.speedCtrlAxis,'Position',[0,0; 50,0],'Color','M','Deletable',false);
+            % Add a listener that will trigger a callback function titled "lineLowMoving" when user
+            % moves the ROI endpoints or the line ROI as a whole
+            %addlistener(app.lineLow,'MovingROI',@(varargin)lineLowMoving(app,app.lineLow));
+            addlistener(app.speedCtrl,'MovingROI',@(varargin)lineSpeedMoving(app,app.speedCtrl));
             % Show the figure after all components are created
 
             app.audioControl.Visible = 'on';
