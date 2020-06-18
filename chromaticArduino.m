@@ -92,7 +92,8 @@ classdef chromaticArduino < matlab.apps.AppBase
         SettingsMenu                   matlab.ui.container.ContextMenu
         SaveSettings                   matlab.ui.container.Menu
         PlotMenu                       matlab.ui.container.ContextMenu
-        EnablePlot                     matlab.ui.container.Menu
+        EnableFreqPlot                 matlab.ui.container.Menu
+        EnableGainPlot                 matlab.ui.container.Menu
     end
 
     properties (Access = private)
@@ -113,7 +114,8 @@ classdef chromaticArduino < matlab.apps.AppBase
 
         audioReader;
         arduinoBoard;
-        displayPlot;
+        dispFreqPlot;
+        dispGainPlot;
     end
 
     % Callbacks that handle component events
@@ -167,6 +169,8 @@ classdef chromaticArduino < matlab.apps.AppBase
                 mkdir(fullfile(getenv('APPDATA'), 'chromaticArduino'));
                 SavePreferencesMenuSelected(app);
             end
+
+            ColorOrderValueChanged(app);
         end
 
         % Close request function: audioControl
@@ -191,14 +195,32 @@ classdef chromaticArduino < matlab.apps.AppBase
             %fullfile(getenv('APPDATA'), 'New')
         end
 
-        % Menu selected function: EnablePlot
-        function EnablePlotMenuSelected(app, ~)
-            if isequal(app.EnablePlot.Text, 'Enable Plot')
-                app.EnablePlot.Text = 'Disable Plot';
-                app.displayPlot = true;
+        % Menu selected function: EnableFreqPlot, EnableGainPlot
+        function EnablePlotMenuSelected(app, event)
+            if isequal(event.Source.Text, 'Enable Freq., Plot')
+                title(app.FreqPlot, 'Frequency Bank Output')
+                app.EnableFreqPlot.Text = 'Disable Freq., Plot';
+                app.EnableGainPlot.Text = 'Enable Gain Plot';
+                plot(app.FreqPlot,zeros(1,10),[1:10])
+                app.FreqPlot.XScale = 'log';
+                legend(app.FreqPlot, 'hide');
+                app.dispFreqPlot = true;
+                app.dispGainPlot = false;
+            elseif isequal(event.Source.Text, 'Enable Gain Plot')
+                title(app.FreqPlot, 'Gain Vs Max Mel Bank Output')
+                app.EnableFreqPlot.Text = 'Enable Freq., Plot';
+                app.EnableGainPlot.Text = 'Disable Gain Plot';
+                app.FreqPlot.XScale = 'linear';
+                %legend(app.FreqPlot,{'Gain','Max Mel'});
+                legend(app.FreqPlot, 'Show');
+                app.dispFreqPlot = false;
+                app.dispGainPlot = true;
+            elseif isequal(event.Source.Text, 'Disable Freq., Plot')
+                app.EnableFreqPlot.Text = 'Enable Freq., Plot';
+                app.dispFreqPlot = false;
             else
-                app.EnablePlot.Text = 'Enable Plot';
-                app.displayPlot = false;
+                app.EnableGainPlot.Text = 'Enable Gain Plot';
+                app.dispGainPlot = false;
             end
         end
 
@@ -223,6 +245,7 @@ classdef chromaticArduino < matlab.apps.AppBase
                 app.StartButton.BackgroundColor = [1 0 0];
                 app.StartButton.Tooltip = {'Stop controlling arduino'};
                 app.StartButton.FontColor = [1 1 1];
+                plotTimer = tic;
             else
                 app.StartButton.Text = 'Start';
                 app.StartButton.BackgroundColor = [0 0.902 0];
@@ -231,6 +254,10 @@ classdef chromaticArduino < matlab.apps.AppBase
             end
             
             fpsTimer = tic;
+
+            allGainValues = double.empty(0,1);
+            allMaxValues = double.empty(0,1);
+            allTimeValues = duration.empty(0,1);
 
             while app.StartButton.Value
                 
@@ -248,11 +275,22 @@ classdef chromaticArduino < matlab.apps.AppBase
                                                     'FrequencyRange',[app.MinFrequency.Value app.MaxFrequency.Value]);
                     
                     if max(melValues) > app.VolTolerance.Value
+                        %dispTimer = tic;
 
                         if max(melValues) > app.GainLimit.Value 
                             gainValue = app.expGain(max(melValues),gainValue,app.AlphaDecayGain.Value,app.AlphaRiseGain.Value);
                         else
-                            gainValue = app.expGain(app.GainLimit.Value,gainValue,app.AlphaDecayGain.Value,app.AlphaRiseGain.Value);
+                            gainValue = app.expGain(max(melValues),gainValue,0.005,app.AlphaRiseGain.Value);
+                        end
+
+                        if length(allGainValues)  < 20000
+                            allGainValues(length(allGainValues) + 1) = gainValue;
+                            allMaxValues(length(allMaxValues) + 1) = max(melValues);
+                            allTimeValues(length(allTimeValues) + 1) = seconds(toc(plotTimer));
+                        else
+                            allGainValues = double.empty(0,1);
+                            allMaxValues = double.empty(0,1);
+                            allTimeValues = duration.empty(0,1);   
                         end
 
                         melValues = melValues / gainValue;
@@ -275,11 +313,20 @@ classdef chromaticArduino < matlab.apps.AppBase
                         writePWMDutyCycle(app.arduinoBoard, app.GreenPin.Value, app.setMax(orderMap('G'),1) * app.lineBright.Position(2,1) / 100);
                         writePWMDutyCycle(app.arduinoBoard, app.BluePin.Value, app.setMax(orderMap('B'),1) * app.lineBright.Position(2,1) / 100);
 
-                        if app.displayPlot
-                            plot(app.FreqPlot, cntFreq(1 : leftIndex), melValues(1 : leftIndex), app.ColorOrder.Value(1),...
-                                        cntFreq(leftIndex : rightIndex), melValues(leftIndex : rightIndex), app.ColorOrder.Value(2),...
-                                        cntFreq(rightIndex : app.NoofFFTbands.Value), melValues(rightIndex : app.NoofFFTbands.Value), app.ColorOrder.Value(3));
-                        end
+                        %elapsedTime = elapsedTime + toc(dispTimer);
+                        %if elapsedTime > 0.1 
+                            if app.dispFreqPlot
+                                plot(app.FreqPlot, cntFreq(1 : leftIndex), melValues(1 : leftIndex), app.ColorOrder.Value(1),...
+                                            cntFreq(leftIndex : rightIndex), melValues(leftIndex : rightIndex), app.ColorOrder.Value(2),...
+                                            cntFreq(rightIndex : app.NoofFFTbands.Value), melValues(rightIndex : app.NoofFFTbands.Value), app.ColorOrder.Value(3));
+                            elseif app.dispGainPlot
+                                plot(app.FreqPlot,allTimeValues,allGainValues,'DisplayName','Gain','DurationTickFormat','mm:ss');
+                                hold(app.FreqPlot, 'on');
+                                plot(app.FreqPlot,allTimeValues,allMaxValues,'--','DisplayName','Max Mel','DurationTickFormat','mm:ss');
+                                hold(app.FreqPlot, 'off');
+                            end
+                            %elapsedTime = 0;
+                        %end
                     else
                         writePWMDutyCycle(app.arduinoBoard, app.RedPin.Value, 0);
                         writePWMDutyCycle(app.arduinoBoard, app.GreenPin.Value, 0);
@@ -1130,10 +1177,15 @@ classdef chromaticArduino < matlab.apps.AppBase
             % Assign app.PlotMenu
             app.FreqPlot.ContextMenu = app.PlotMenu;
 
-            % Create EnablePlot
-            app.EnablePlot = uimenu(app.PlotMenu);
-            app.EnablePlot.MenuSelectedFcn = createCallbackFcn(app, @EnablePlotMenuSelected, true);
-            app.EnablePlot.Text = 'Enable Plot';
+            % Create EnableFreqPlot
+            app.EnableFreqPlot = uimenu(app.PlotMenu);
+            app.EnableFreqPlot.MenuSelectedFcn = createCallbackFcn(app, @EnablePlotMenuSelected, true);
+            app.EnableFreqPlot.Text = 'Enable Freq., Plot';
+
+            % Create EnableGainPlot
+            app.EnableGainPlot = uimenu(app.PlotMenu);
+            app.EnableGainPlot.MenuSelectedFcn = createCallbackFcn(app, @EnablePlotMenuSelected, true);
+            app.EnableGainPlot.Text = 'Enable Gain Plot';
 
             % Creating axis for frequency selection 
             app.freqAxis = axes(app.Panel,'Color','none','YColor','none','XLim',[20,20000],'YTick',[], ...
