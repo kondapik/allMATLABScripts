@@ -116,6 +116,7 @@ classdef chromaticArduino < matlab.apps.AppBase
         arduinoBoard;
         dispFreqPlot;
         dispGainPlot;
+        hsvValues;
     end
 
     % Callbacks that handle component events
@@ -171,6 +172,7 @@ classdef chromaticArduino < matlab.apps.AppBase
             end
 
             ColorOrderValueChanged(app);
+            lineSpeedMoving(app,app.speedCtrl);
         end
 
         % Close request function: audioControl
@@ -235,10 +237,11 @@ classdef chromaticArduino < matlab.apps.AppBase
             app.audioReader = audioDeviceReader('Device',app.AudioDevice.Value,'SamplesPerFrame',numOfFrames);
             audioData = zeros(numOfFrames,1);
 
-            sineTime = 0;
+            sineTime = 1;
             elapsedTime = 0;
             fpsCounterTime = 0;
             fpsCount = 0;
+            colorDirection = 1;
 
             if app.StartButton.Value
                 app.StartButton.Text = 'Stop';
@@ -336,19 +339,34 @@ classdef chromaticArduino < matlab.apps.AppBase
                     dispTimer = tic;
                     pause(1 / app.AudioFPS.Value)
                     sineValue = (2 * pi * sineTime * 2) / ((101 - app.speedCtrl.Position(2,1)) * app.AudioFPS.Value);
-                    writePWMDutyCycle(app.arduinoBoard,app.RedPin.Value,abs(sin(sineValue) * app.lineBright.Position(2,1) / 100));
-                    writePWMDutyCycle(app.arduinoBoard,app.GreenPin.Value,abs(sin(sineValue + (pi / 3)) * app.lineBright.Position(2,1) / 100));
-                    writePWMDutyCycle(app.arduinoBoard,app.BluePin.Value,abs(sin(sineValue + (2 * pi / 3)) * app.lineBright.Position(2,1) / 100));
+                    writePWMDutyCycle(app.arduinoBoard,app.RedPin.Value,(app.setMin(sin(sineValue),0) * app.lineBright.Position(2,1) / 100));
+                    writePWMDutyCycle(app.arduinoBoard,app.GreenPin.Value,(app.setMin(sin(sineValue + (pi / 3)),0) * app.lineBright.Position(2,1) / 100));
+                    writePWMDutyCycle(app.arduinoBoard,app.BluePin.Value,(app.setMin(sin(sineValue + (2 * pi / 3)),0) * app.lineBright.Position(2,1) / 100));
+
+                    % if sineTime == length(app.hsvValues)
+                    %     colorDirection = -1;
+                    % elseif sineTime == 1
+                    %     colorDirection = 1;
+                    % end
+
+                    % rgbValues = hsv2rgb(app.hsvValues(sineTime,:,:));
+                    % writePWMDutyCycle(app.arduinoBoard,app.RedPin.Value,rgbValues(1));
+                    % writePWMDutyCycle(app.arduinoBoard,app.GreenPin.Value,rgbValues(2));
+                    % writePWMDutyCycle(app.arduinoBoard,app.BluePin.Value,rgbValues(3));
 
                     elapsedTime = elapsedTime + toc(dispTimer);
                     if elapsedTime > 0.1 
-                        app.redCtrl.Position(2,1) = abs(sin(sineValue)) * 255;
-                        app.greenCtrl.Position(2,1) = abs(sin(sineValue + (pi / 3))) * 255;
-                        app.blueCtrl.Position(2,1) = abs(sin(sineValue + (2 * pi / 3))) * 255;
+                        app.redCtrl.Position(2,1) = (app.setMin(sin(sineValue),0) * app.lineBright.Position(2,1) / 100) * 255;
+                        app.greenCtrl.Position(2,1) = (app.setMin(sin(sineValue + (2 * pi / 3)),0) * app.lineBright.Position(2,1) / 100) * 255;
+                        app.blueCtrl.Position(2,1) = (app.setMin(sin(sineValue + (4 * pi / 3)),0) * app.lineBright.Position(2,1) / 100) * 255;
+
+                        % app.redCtrl.Position(2,1) = rgbValues(1) * 255;
+                        % app.greenCtrl.Position(2,1) = rgbValues(2) * 255;
+                        % app.blueCtrl.Position(2,1) = rgbValues(3) * 255;
                         elapsedTime = 0;
                     end
                     
-                    sineTime = sineTime + 1;
+                    sineTime = sineTime + colorDirection;
                 else
                     pause(1)
                     writePWMDutyCycle(app.arduinoBoard, app.RedPin.Value, (app.redCtrl.Position(2,1) / 255) * (app.lineBright.Position(2,1) / 100));
@@ -549,6 +567,7 @@ classdef chromaticArduino < matlab.apps.AppBase
             source.Position(1,1) = 0;
             source.Position(1,2) = 0;
             source.Position(2,2) = 0;
+            %app.hsvValues = hsv(256 + round(10*source.Position(2,1)));
         end
     end
 
@@ -578,6 +597,15 @@ classdef chromaticArduino < matlab.apps.AppBase
             %Set upper limit to the value
             if value > maxValue
                 newValue = maxValue;
+            else
+                newValue = value;
+            end
+        end
+
+        function newValue = setMin(value,minValue)
+            %Set lower limit to the value
+            if value < minValue
+                newValue = minValue;
             else
                 newValue = value;
             end
