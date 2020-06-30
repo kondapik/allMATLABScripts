@@ -9,8 +9,22 @@ end
 top_outports = find_system(gcs,'SearchDepth',1,'BlockType','Outport');
 
 for otpNo = 1:length(top_outports)
+    signalName = get_param(top_outports{otpNo,1},'Name');
+    lineHandle = get_param(top_outports{otpNo,1},'LineHandles');
+    set_param(lineHandle.Inport,'Name',signalName);
+end
+
+top_outports = find_system(gcs,'SearchDepth',1,'BlockType','Outport');
+
+for otpNo = 1:length(top_outports)
     lineHandle = get_param(top_outports{otpNo,1},'LineHandles');
     set(lineHandle.Inport,'SignalPropagation','on');
+end
+
+top_from = find_system(gcs,'SearchDepth',1,'BlockType','From');
+for frmNo = 1:length(top_from)
+lineHandle = get_param(top_from{frmNo,1},'LineHandles');
+set(lineHandle.Outport,'SignalPropagation','on');
 end
 
 allLines = find_system(gcs,'FindAll','on','FollowLinks','on','type','line');

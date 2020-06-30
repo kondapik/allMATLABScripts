@@ -109,11 +109,14 @@ classdef reqAnalysis < handle
             exitWhile = 1;
             while exitWhile
                 napp.docIdx = napp.docIdx + 1;
-                if ~isempty(regexp(napp.reqSentences{napp.docIdx},'^\d.\d','ONCE'))
+                if ~isempty(regexp(napp.reqSentences{napp.docIdx},'^\d\.\d','ONCE'))
                     %*fprintf('Found Revision History:%s\n',napp.reqSentences{napp.docIdx});
-                    revHis = strip(napp.reqSentences{napp.docIdx});
-                    napp.revNo = napp.revNo + 1;
-                    waitbar(0.25 + (napp.revNo / 7)*(0.25),napp.progBar,{'Reading revision history(2/4)',sprintf('Current revision: %s...',revHis)});
+                    if ~isequal(revHis,strip(napp.reqSentences{napp.docIdx}))
+                        revHis = strip(napp.reqSentences{napp.docIdx});
+                        napp.revNo = napp.revNo + 1;
+                        napp.allReqHis{napp.revNo} = revHis;
+                        waitbar(0.25 + (napp.revNo / 8)*(0.25),napp.progBar,{'Reading revision history(2/4)',sprintf('Current revision: %s...',revHis)});
+                    end
                 end
                 if ~isempty(regexp(napp.reqSentences{napp.docIdx},'^\s*\(N\)','ONCE'))
                     %disp('New requirements');
@@ -191,7 +194,7 @@ classdef reqAnalysis < handle
                         waitbar(0.5 + (reqIdx / maxReq)*(0.25),napp.progBar,{'Reading requirement IDs(3/4)','Current Requirement ID',regexprep(requirementID,'_','\\_')});
 
                         if reqIdx > 1 && ~isempty(find(contains(string({napp.Requirements.ReqID}),requirementID)))
-                            msgbox()
+                            %msgbox()
                             %!fprintf('Found Duplicate:%s\n',requirementID);
                             msgbox(sprintf('Duplicate Requirement IDs found: %s',regexprep(requirementID,'_','\\_')),'Error','error');
                             exitWhile = 0;
@@ -218,7 +221,7 @@ classdef reqAnalysis < handle
         end
 
         function reqCheck(napp)
-            napp.allReqHis = unique({napp.revReq.Revision});
+            %napp.allReqHis = unique({napp.revReq.Revision});
             histIDs = {napp.revReq.ReqID};
             for reqNo = 1 : length(napp.Requirements)
                 revHisNo = 0;
@@ -239,24 +242,28 @@ classdef reqAnalysis < handle
                             prevReq = napp.revReq(foundIdx(histNo)).Revision;
                         end
 
-                        if  reReq == 0 && isequal(napp.revReq(foundIdx(histNo)).Tag,'New')
-                            reReq = 1;
-                        elseif reReq == 1 && isequal(napp.revReq(foundIdx(histNo)).Tag,'New')
-                            if isequal(napp.revReq(foundIdx(histNo)).ErrFlg,'No Error')
-                                napp.revReq(foundIdx(histNo)).ErrFlg = 'Reincarnated';
-                            else
-                                napp.revReq(foundIdx(histNo)).ErrFlg = sprintf('%s, Reincarnated',napp.revReq(foundIdx(histNo)).ErrFlg);
+                        if ~isequal(napp.revReq(foundIdx(histNo)).Revision,'2.1.1')
+                            if  reReq == 0 && isequal(napp.revReq(foundIdx(histNo)).Tag,'New')
+                                reReq = 1;
+                            elseif reReq == 1 && isequal(napp.revReq(foundIdx(histNo)).Tag,'New')
+                                if isequal(napp.revReq(foundIdx(histNo)).ErrFlg,'No Error')
+                                    napp.revReq(foundIdx(histNo)).ErrFlg = 'Reincarnated';
+                                else
+                                    napp.revReq(foundIdx(histNo)).ErrFlg = sprintf('%s, Reincarnated',napp.revReq(foundIdx(histNo)).ErrFlg);
+                                end
                             end
-                        end
 
-                        if zomReq == 0 && (isequal(napp.revReq(foundIdx(histNo)).Tag,'Moved') || isequal(napp.revReq(foundIdx(histNo)).Tag,'Deleted'))
-                            zomReq = 1;
-                        elseif zomReq == 1 && (isequal(napp.revReq(foundIdx(histNo)).Tag,'Moved') || isequal(napp.revReq(foundIdx(histNo)).Tag,'Deleted'))
-                            if isequal(napp.revReq(foundIdx(histNo)).ErrFlg,'No Error')
-                                napp.revReq(foundIdx(histNo)).ErrFlg = 'Zombie';
-                            else
-                                napp.revReq(foundIdx(histNo)).ErrFlg = sprintf('%s, Zombie',napp.revReq(foundIdx(histNo)).ErrFlg);
+                            if zomReq == 0 && (isequal(napp.revReq(foundIdx(histNo)).Tag,'Moved') || isequal(napp.revReq(foundIdx(histNo)).Tag,'Deleted'))
+                                zomReq = 1;
+                            elseif zomReq == 1 && (isequal(napp.revReq(foundIdx(histNo)).Tag,'Moved') || isequal(napp.revReq(foundIdx(histNo)).Tag,'Deleted'))
+                                if isequal(napp.revReq(foundIdx(histNo)).ErrFlg,'No Error')
+                                    napp.revReq(foundIdx(histNo)).ErrFlg = 'Zombie';
+                                else
+                                    napp.revReq(foundIdx(histNo)).ErrFlg = sprintf('%s, Zombie',napp.revReq(foundIdx(histNo)).ErrFlg);
+                                end
                             end
+                        else
+                            napp.revReq(foundIdx(histNo)).Tag = napp.revReq(foundIdx(histNo - 1)).Tag;
                         end
 
                         napp.revReq(foundIdx(histNo)).Found = 'Yes';
@@ -265,7 +272,7 @@ classdef reqAnalysis < handle
                         revIdx = revIdx(1);
                         napp.Requirements(reqNo).Revisions(revIdx) = 1;
 
-                        if isequal(napp.revReq(foundIdx(histNo)).Tag,'Modified') & (revIdx > 3)
+                        if isequal(napp.revReq(foundIdx(histNo)).Tag,'Modified') & (revIdx > 3) & (revIdx ~= 6)
                             revHisNo = revHisNo + 1;
                         end
 
