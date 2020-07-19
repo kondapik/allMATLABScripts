@@ -21,7 +21,7 @@ else
             %inports
             portNames{length(portNames) + 1} = port_data(port_no).Name;
             if isequal(port_data(port_no).BaseDataType,'Enum')
-                gcEntries = find(DataDictSec,'-regexp','Name',port_data(port_no).OutDataType(7:length(port_data(port_no).OutDataType)));
+                gcEntries = find(DataDictSec,'Name',port_data(port_no).OutDataType(7:length(port_data(port_no).OutDataType)));
                 enumValue = getValue(gcEntries(1));
                 portDefVal{length(portDefVal) + 1} = enumValue.DefaultValue;
             else
@@ -31,7 +31,7 @@ else
         elseif port_no > (no_rnbls + no_inports + AUTOSAR_stat) && port_no < (no_rnbls+no_inports+no_outports+1+AUTOSAR_stat)
             portNames{length(portNames) + 1} = port_data(port_no).Name;
             if isequal(port_data(port_no).BaseDataType,'Enum')
-                gcEntries = find(DataDictSec,'-regexp','Name',port_data(port_no).OutDataType(7:length(port_data(port_no).OutDataType)));
+                gcEntries = find(DataDictSec,'Name',port_data(port_no).OutDataType(7:length(port_data(port_no).OutDataType)));
                 enumValue = getValue(gcEntries(1));
                 portDefVal{length(portDefVal) + 1} = enumValue.DefaultValue;
             else
