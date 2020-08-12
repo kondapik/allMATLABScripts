@@ -26,6 +26,8 @@ classdef codeIntegration < handle
         idtrStructMap
         defValueMap
         glbConfigMap
+        cmpDirMap
+        allMdlData
 
         progBar
         exitFlag
@@ -42,10 +44,14 @@ classdef codeIntegration < handle
             %bdclose('all');
             currFolder = pwd;
 
-            [napp.arxmlName, napp.arxmlPath] = uigetfile({'*.arxml','AUTOSAR XML (*.arxml)'},'Select root ARXML');
-            %napp.sourcePath = uigetdir(currFolder,'Select ASW source folder with all delivered models');
-            napp.dstPath = uigetdir(currFolder,'Select path to save integrated model');
-            napp.sourcePath = 1;
+            % [napp.arxmlName, napp.arxmlPath] = uigetfile({'*.arxml','AUTOSAR XML (*.arxml)'},'Select root ARXML');
+            % napp.sourcePath = uigetdir(currFolder,'Select ASW source folder with all delivery artifacts');
+            % napp.dstPath = uigetdir(currFolder,'Select path to save integrated model');
+
+            napp.arxmlName = 'RootSWComposition.arxml';
+            napp.arxmlPath = 'D:\R0019983\Branches\OBC_A3_1\20_Design\ASW\SW_Composition_ARXML';
+            napp.sourcePath = 'D:\R0019983\Branches\OBC_A3_1\30_Software\Source\ASW';
+            napp.dstPath = 'D:\Temp_Project\ASW_Integration\integrationBuildTest';
 
             %disp(napp.framePath);
             if isequal(napp.dstPath,0) ||  isequal(napp.sourcePath,0) || isequal(napp.arxmlPath,0)
@@ -58,6 +64,13 @@ classdef codeIntegration < handle
                 napp.exitFlag = 1;
                 tmpMat(napp, 0);
                 if exist('RootSWComposition_IntegrationData.mat')
+                    napp.progBar = waitbar(0,{'Reading model data(2/5)','Collecting paths of components...'},'Name','ASW Code Integration (v1)');
+                    napp.cmpDirMap = napp.getComponentPath(napp.sourcePath);
+                    napp.dataTypeMap('Std_ReturnType') = 'uint8';
+                    napp.dataTypeMap('Dem_EventStatusType') = 'uint8';
+                    napp.dataTypeMap('Dem_UdsStatusByteType') = 'uint8';
+                    napp.dataTypeMap('CANSM_BSWM_MG') = 'uint8';
+                    collectModelData(napp);
                 else
                     readARXML(napp);
                 end
@@ -344,6 +357,197 @@ classdef codeIntegration < handle
             tmpMat(napp, 1);
         end
 
+        function collectModelData(napp)
+            napp.allMdlData = containers.Map();
+
+            waitbar(0,napp.progBar,{'Collecting model data(2/5)',sprintf('Loading model...')});
+            for cmpNo = 1 : length(napp.allASWCmp)
+            % for cmpNo = 12
+                cmpName = napp.allASWCmp(cmpNo).cmpName;
+                cmpPath = napp.cmpDirMap(cmpName);
+
+                % waitbar((cmpNo-1/length(napp.allASWCmp)) + ((0.3*(confNo/(allPortSpec.getLength - 1)))/length(napp.allASWCmp)),napp.progBar,{'Collecting model data(2/5)',sprintf('Loading model...')});
+                waitbar(((cmpNo-1)/length(napp.allASWCmp)),napp.progBar,{'Collecting model data(2/5)',sprintf('Loading ''%s'' model...',regexprep(cmpName,'_','\\_'))});
+                cd([cmpPath '\Model'])
+                load_system(sprintf('%s.slx', cmpName));
+                DataDictionary = get_param(cmpName,'DataDictionary');
+                DataDictObj = Simulink.data.dictionary.open(DataDictionary);
+                DataDictSec = getSection(DataDictObj,'Design Data');
+
+                mdlRnbls = find_system(cmpName,'SearchDepth',1,'regexp','on','BlockType','SubSystem','Name','Rnbl_.*');
+                mdlData = struct('rnblData',{},'glbConfig',{},'funcData',{});
+                rnblData = struct('rnblName',{},'inportData',{},'outportData',{},'sampleTime',{});
+                
+                waitbar(((cmpNo-1)/length(napp.allASWCmp)) + (0.1/length(napp.allASWCmp)),napp.progBar,{'Collecting model data(2/5)',sprintf('Reading port data of ''%s'' model...',regexprep(cmpName,'_','\\_'))});
+                for rnblNo = 1 : length(mdlRnbls)
+
+                    %? initializing structures
+                    inportData = struct('portName',{},'appDataType',{},'baseDataType',{},'isBus',{});
+                    outportData = struct('portName',{},'appDataType',{},'baseDataType',{},'isBus',{});
+                    %? Collect port data
+                    portConn = get_param(mdlRnbls{rnblNo},'PortConnectivity');
+                    for portNo = 1 : length(portConn)
+                        if isequal(portConn(portNo).Type,'trigger')
+                            rnblData(rnblNo).rnblName = get_param(portConn(portNo).SrcBlock,'Name');
+                            rnblData(rnblNo).sampleTime = get_param(portConn(portNo).SrcBlock,'SampleTime');
+                        else
+                            if isempty(portConn(portNo).DstBlock)
+                                %* Collecting inport Data
+                                %Looking for inport
+                                if isequal(get_param(portConn(portNo).SrcBlock,'BlockType'),'Inport')
+                                    portHandle = portConn(portNo).SrcBlock;
+                                else
+                                    gotoBlk = find_system(cmpName,'SearchDepth',1,'BlockType','Goto','GotoTag',get_param(portConn(portNo).SrcBlock,'GotoTag'));
+                                    gotoPort = get_param(gotoBlk{1},'PortConnectivity');
+                                    portHandle = gotoPort(1).SrcBlock;
+                                end
+                                inportNo = length(inportData) + 1;
+                                inportData = napp.getPortData(inportData, inportNo, portHandle, napp.dataTypeMap);
+                            else
+                                %* Collecting outport Data
+                                outportNo = length(outportData) + 1;
+                                outportData = napp.getPortData(outportData, outportNo, portConn(portNo).DstBlock, napp.dataTypeMap);
+                            end
+                        end
+                    end
+                end
+                mdlData(1).rnblData = rnblData;
+
+                funcData = struct('functionProto',{},'funcName',{},'inArg',{},'outArg',{},'inArgSpc',{},'inBase',{},'outArgSpc',{},'outBase',{},'dstBlocks',{},'srcBlocks',{});
+
+
+                %? Collecting function data
+                allCaller = find_system(cmpName,'BlockType','FunctionCaller'); 
+                for calNo = 1:length(allCaller)
+                    waitbar(((cmpNo-1)/length(napp.allASWCmp)) + ((0.1 + (0.4*calNo/length(allCaller)))/length(napp.allASWCmp)),napp.progBar,{'Collecting model data(2/5)',sprintf('Reading caller data of ''%s'' model...',regexprep(cmpName,'_','\\_'))});
+
+                    funcData(calNo).functionProto = get_param(allCaller(calNo),'FunctionPrototype');
+
+                    if ~isequal(get_param(allCaller(calNo),'InputArgumentSpecifications'),{'<Enter example>'})
+                        funcData(calNo).inArgSpc = get_param(allCaller(calNo),'InputArgumentSpecifications');
+                    end
+                    if ~isequal(get_param(allCaller(calNo),'OutputArgumentSpecifications'),{'<Enter example>'})
+                        funcData(calNo).outArgSpc = get_param(allCaller(calNo),'OutputArgumentSpecifications');
+                    end
+
+                    %( = )*(?<funName>\w*(?=\()) -> gives function name under 'funName' token
+                    %\[*(?<ouArg>,*\w*)*\]*(?=( = )) -> gives output arguments: Comma delimited under 'ouArg' token
+                    %\((?<inArg>,*\w*)*\) -> gives input arguments: Comma delimited under 'inArg' token
+                    %* Collecting output arguments
+                    outArg = regexp(funcData(calNo).functionProto,'\[*(?<ouArg>,*\w*)*\]*(?=( = ))','names');
+                    outArg = outArg{1};
+                    if ~isempty(outArg)
+                        outputArg = outArg.ouArg;
+                        funcData(calNo).outArg = strsplit(outputArg,',');
+                        funcData(calNo).outArgSpc = strsplit(funcData(calNo).outArgSpc{1},',');
+                        %funcParts(funcNo).inputArg = inputArg;
+                        for outNo = 1:length(funcData(calNo).outArg)
+                            dataType = strtrim(funcData(calNo).outArgSpc{outNo});
+                            enumType = regexp(dataType,'(?<enumName>\w*)\(\d*\)','names');
+                            %enumType = enumType{1};
+                            if ~isempty(enumType)
+                                funcData(calNo).outArgSpc{outNo} = enumType.enumName;
+                            else
+                                entryObj = getEntry(DataDictSec,dataType);
+                                paramValue = getValue(entryObj);
+                                if isequal(paramValue.DataType(1 : 4),'Enum')
+                                    funcData(calNo).outArgSpc{outNo} =  paramValue.DataType(7 : length(paramValue.DataType));
+                                else
+                                    funcData(calNo).outArgSpc{outNo} =  paramValue.DataType;
+                                end
+                            end
+                            funcData(calNo).outBase{outNo} = napp.dataTypeMap(funcData(calNo).outArgSpc{outNo});
+                        end
+                    else
+                        funcData(calNo).outArg = outArg;
+                    end
+
+                    funcName = regexp(funcData(calNo).functionProto,'( = )*(?<funName>\w*(?=\())','names');
+                    funcName = funcName{1};
+                    funcData(calNo).funcName = funcName.funName;
+                    
+                    %* Collecting input arguments
+                    inpArg = regexp(funcData(calNo).functionProto,'\((?<inArg>,*\w*)*\)','names');
+                    inpArg = inpArg{1};
+                    if ~isequal(inpArg.inArg,'')
+                        inputArg = inpArg.inArg;
+                        funcData(calNo).inArg = strsplit(inputArg,',');
+                        funcData(calNo).inArgSpc = strsplit(funcData(calNo).inArgSpc{1},',');
+                        %funcParts(funcNo).outputArg = outputArg;
+                        for inpNo = 1:length(funcData(calNo).inArg)
+                            dataType = strtrim(funcData(calNo).inArgSpc{inpNo});
+                            enumType = regexp(dataType,'(?<enumName>\w*)\(\d*\)','names');
+                            %enumType = enumType{1};
+                            if ~isempty(enumType)
+                                funcData(calNo).inArgSpc{inpNo} = enumType.enumName;
+                            else
+                                entryObj = getEntry(DataDictSec,dataType);
+                                paramValue = getValue(entryObj);
+                                if isequal(paramValue.DataType(1 : 4),'Enum')
+                                    funcData(calNo).inArgSpc{inpNo}  =  paramValue.DataType(7 : length(paramValue.DataType));
+                                else
+                                    funcData(calNo).inArgSpc{inpNo}  =  paramValue.DataType;
+                                end
+                            end
+                            funcData(calNo).inBase{inpNo} = napp.dataTypeMap(funcData(calNo).inArgSpc{inpNo});
+                        end
+                    else
+                        funcData(calNo).inArg = [];
+                    end
+
+                    %* Checking usage of output and input arguments
+                    dstBlk = cell.empty(1,0);
+                    srcBlk = cell.empty(1,0);
+                    portCon = get_param(allCaller(calNo),'PortConnectivity');
+                    portCon = portCon{1};
+                    for portNo = 1:length(portCon)
+                        if ~isempty(portCon(portNo).SrcBlock)
+                            srcBlk{length(srcBlk) + 1} = get_param(portCon(portNo).SrcBlock,'BlockType');
+                        end
+                        if ~isempty(portCon(portNo).DstBlock)
+                            dstBlk{length(dstBlk) + 1} = get_param(portCon(portNo).DstBlock,'BlockType');
+                        end
+                    end
+                    funcData(calNo).dstBlocks = dstBlk;
+                    funcData(calNo).srcBlocks = srcBlk;
+                end
+                mdlData(1).funcData = funcData;
+
+                glbConfig = struct('name',{},'appDataType',{},'baseDataType',{},'arxmlValue',{},'slddValue',{});
+                gcEntries = find(DataDictSec,'-regexp','Name','GC_+');
+
+                %? Collecting global configurations
+                waitbar(((cmpNo-1)/length(napp.allASWCmp)) + (0.7/length(napp.allASWCmp)),napp.progBar,{'Collecting model data(2/5)',sprintf('Reading glb configs of ''%s'' model...',regexprep(cmpName,'_','\\_'))});
+                if ~isempty(gcEntries)
+                    for gcNo = 1:length(gcEntries)
+                        param = getValue(gcEntries(gcNo));
+                        glbConfig(gcNo).name = gcEntries(gcNo).Name;
+                        if isequal(param.DataType(1 : 4),'Enum')
+                            glbConfig(gcNo).appDataType = param.DataType(7 : length(param.DataType));
+                        else
+                            glbConfig(gcNo).appDataType = param.DataType;
+                        end
+                        glbConfig(gcNo).baseDataType = napp.dataTypeMap(glbConfig(gcNo).appDataType);
+                        glbConfig(gcNo).slddValue = param.Value;
+                        gcName = strsplit(glbConfig(gcNo).name,'_');
+                        gcName = gcName(1 : length(gcName) - 2);
+                        gcName{length(gcName) + 1} = 'P';
+                        gcName = join(gcName,'_'); 
+                        glbConfig(gcNo).arxmlValue = napp.glbConfigMap(gcName{1});
+                    end
+                end
+                mdlData(1).glbConfig = glbConfig;
+
+                napp.allMdlData(cmpName) = mdlData(1);
+
+                %?closing model files 
+                while ~isempty(gcs)
+                close_system(gcs,0);
+                end
+                Simulink.data.dictionary.closeAll
+            end
+        end
+
         function tmpMat(napp, writeData)
             cd(napp.dstPath);
             if exist('RootSWComposition_IntegrationData.mat')
@@ -369,6 +573,30 @@ classdef codeIntegration < handle
     end
 
     methods (Static)
-        
+        function cmpDirMap = getComponentPath(srcPath)
+            allDir = dir(srcPath);
+            cmpDirMap = containers.Map();
+            for dirNo = 1 : length(allDir)
+                if ~isequal(allDir(dirNo).name,'.') && ~isequal(allDir(dirNo).name,'..')
+                    codeDir = dir([allDir(dirNo).folder '\' allDir(dirNo).name '\Code']);
+                    cmpDirMap(codeDir(3).name(1:length(codeDir(3).name) - 12)) = [allDir(dirNo).folder '\' allDir(dirNo).name];
+                end
+            end
+        end
+
+        function portData = getPortData(portData, portNo, portHandle, dataTypeMap)
+            portData(portNo).portName = get_param(portHandle,'Name');
+            portData(portNo).isBus = 0;
+            outDataType = get_param(portHandle,'OutDataTypeStr');
+            if isequal(outDataType(1 : 4),'Enum')
+                portData(portNo).appDataType =  outDataType(7 : length(outDataType));
+            elseif isequal(outDataType(1 : 3),'Bus')
+                portData(portNo).appDataType =  outDataType(6 : length(outDataType));
+                portData(portNo).isBus = 1;
+            else
+                portData(portNo).appDataType =  outDataType;
+            end
+            portData(portNo).baseDataType = dataTypeMap(portData(portNo).appDataType);
+        end
     end
 end
