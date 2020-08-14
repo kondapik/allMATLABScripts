@@ -28,6 +28,7 @@ classdef codeIntegration < handle
         glbConfigMap
         cmpDirMap
         allMdlData
+        rteGenerationData
 
         progBar
         exitFlag
@@ -70,7 +71,12 @@ classdef codeIntegration < handle
                     napp.dataTypeMap('Dem_EventStatusType') = 'uint8';
                     napp.dataTypeMap('Dem_UdsStatusByteType') = 'uint8';
                     napp.dataTypeMap('CANSM_BSWM_MG') = 'uint8';
-                    collectModelData(napp);
+                    matNames = who('-file', 'RootSWComposition_IntegrationData.mat');
+                    if ismember('modelData', matNames)
+                        readingRteFiles(napp);
+                    else
+                        collectModelData(napp);
+                    end
                 else
                     readARXML(napp);
                 end
@@ -101,15 +107,6 @@ classdef codeIntegration < handle
     end
 
     methods (Access = private)
-        % #define\s*(?<oldFun>\w*)\s*(?<xpFun>\w*) -> get expanded function call
-
-        % (?<funProto>Std_ReturnType\s*\w*\(\s*\w*\**\s*\w*\)) -> get only function prototype
-        % Std_ReturnType\s*(?<oldFun>\w*)\(\s*\w*\**\s*(?<funArg>\w*)\) -> get funName and arg
-        %! (?<funProto>Std_ReturnType\s*(?<oldFun>\w*)\(\s*\w*\**\s*(?<funArg>\w*)\)) -> get function prototype (doesn't work -> MATLAB doesn't support nested tokens)
-
-        % (?<paramFun>\w*\s*\w*\(\w*\)\s*{\s*return\s*\w*;\s*}) -> get only parameter function definition
-        % \w*\s*(?<oldFun>\w*)\(\w*\)\s*{\s*return\s*(?<retVar>\w*);\s*} ->get funName and return variable
-        %! (?<paramFun>\w*\s*(?<oldFun>\w*)\(\w*\)\s*{\s*return\s*(?<retVar>\w*);\s*}) -> get parameter function definition (doesn't work -> MATLAB doesn't support nested tokens)
 
         function readARXML(napp)
             cd(napp.arxmlPath);
@@ -380,7 +377,6 @@ classdef codeIntegration < handle
                 
                 waitbar(((cmpNo-1)/length(napp.allASWCmp)) + (0.1/length(napp.allASWCmp)),napp.progBar,{'Collecting model data(2/5)',sprintf('Reading port data of ''%s'' model...',regexprep(cmpName,'_','\\_'))});
                 for rnblNo = 1 : length(mdlRnbls)
-
                     %? initializing structures
                     inportData = struct('portName',{},'appDataType',{},'baseDataType',{},'isBus',{});
                     outportData = struct('portName',{},'appDataType',{},'baseDataType',{},'isBus',{});
@@ -410,6 +406,8 @@ classdef codeIntegration < handle
                             end
                         end
                     end
+                    rnblData(rnblNo).inportData = inportData;
+                    rnblData(rnblNo).outportData = outportData;
                 end
                 mdlData(1).rnblData = rnblData;
 
@@ -546,11 +544,182 @@ classdef codeIntegration < handle
                 end
                 Simulink.data.dictionary.closeAll
             end
+
+            %! Saving autosar data in matFile
+            tmpMat(napp, 1);
+        end
+
+        function readingRteFiles(napp)
+            % #define\s*(?<oldFun>\w*)\s*(?<xpFun>\w*) -> get expanded function call
+
+            % (?<funProto>Std_ReturnType\s*\w*\(\s*\w*\**\s*\w*\)) -> get only function prototype
+            % Std_ReturnType\s*(?<oldFun>\w*)\(\s*\w*\**\s*(?<funArg>\w*)\) -> get funName and arg
+            %! (?<funProto>Std_ReturnType\s*(?<oldFun>\w*)\(\s*\w*\**\s*(?<funArg>\w*)\)) -> get function prototype (doesn't work -> MATLAB doesn't support nested tokens)
+
+            % (?<paramFun>\w*\s*\w*\(\w*\)\s*{\s*return\s*\w*;\s*}) -> get only parameter function definition
+            % \w*\s*(?<oldFun>\w*)\(\w*\)\s*{\s*return\s*(?<retVar>\w*);\s*} ->get funName and return variable
+            %! (?<paramFun>\w*\s*(?<oldFun>\w*)\(\w*\)\s*{\s*return\s*(?<retVar>\w*);\s*}) -> get parameter function definition (doesn't work -> MATLAB doesn't support nested tokens)
+
+            napp.rteGenerationData = struct('signalName',{},'portType',{},'funProto',{},'argName',{},'dataType',{},'varName',{},'defValue',{},'portName',{},'dataElement',{},'isBus',{});
+            % [~,I] = sort({<structName>.<fieldName>}); & <structName> = <structName>(I); %* To sort a structure
+
+            cd(napp.integPath);
+            % for cmpNo = 1 : length(napp.allASWCmp)
+            for cmpNo = 12
+                cmpName = napp.allASWCmp(cmpNo).cmpName;
+                cmpPath = napp.cmpDirMap(cmpName);
+
+                %? Copying code files
+                copyfile([cmpPath '\Code'], napp.integPath);
+                copyfile([cmpPath '\Code\' cmpName '_autosar_rtw\stub'], [napp.integPath '\' cmpName '_autosar_rtw']);
+                copyfile([napp.integPath '\headerFiles'], [napp.integPath '\' cmpName '_autosar_rtw']);
+
+                %? Reading Rte_<modelName> files
+                glbConfigRteData = struct('paramDef',{},'retNames',{});
+                headerRteData = struct('funProto',{},'argNames',{},'callExp',{}); 
+                %* collecting global configuration data from 'Rte_<modelName>.c'
+                if exist([napp.integPath '\' cmpName '_autosar_rtw\stub\Rte_' cmpName '.c'])
+                    delete([napp.integPath '\' cmpName '_autosar_rtw\Rte_' cmpName '.c']);
+                    data = fileread([napp.integPath '\' cmpName '_autosar_rtw\stub\Rte_' cmpName '.c']);
+                    glbConfigRteData(1).paramDef = regexp(data,'(?<paramFun>\w*\s*\w*\(\w*\)\s*{\s*return\s*\w*;\s*})','names');
+                    glbConfigRteData(1).retNames = regexp(data,'\w*\s*(?<oldFun>\w*)\(\w*\)\s*{\s*return\s*(?<retVar>\w*);\s*}','names');
+                end
+
+                %* collecting rte function data from 'Rte_<modelName>.h'
+                data = fileread([napp.integPath '\' cmpName '_autosar_rtw\Rte_' cmpName '.h']);
+                headerRteData(1).funProto = regexp(data,'(?<funProto>Std_ReturnType\s+\w+\(\s*\w*\**\s*\w*\))','names');
+                headerRteData(1).argNames = regexp(data,'Std_ReturnType\s*(?<oldFun>\w+)\(\s*\w*\**\s*(?<funArg>\w*)\)','names');
+                headerRteData(1).callExp = regexp(data,'#define\s*(?<oldFun>\w+)\s+(?<xpFun>\w+)','names');
+
+                % Rte_Invalidate
+                % find(contains({headerRteData.callExp.oldFun},mdlData.rnblData.outportData(1).portName))
+                %? Updating rteData for rte call generation
+                mdlData = napp.allMdlData(cmpName);
+                for rnblNo = 1 : length(mdlData.rnblData)
+                    for inpNo = 1 : length(mdlData.rnblData(rnblNo).inportData)
+                        funNameIdx = find(contains({headerRteData.callExp.oldFun},mdlData.rnblData(rnblNo).inportData(inpNo).portName));
+                        rteNo = length(napp.rteGenerationData) + 1;
+                        
+                        napp.rteGenerationData(rteNo).signalName = mdlData.rnblData(rnblNo).inportData(inpNo).portName;
+                        napp.rteGenerationData(rteNo).portType = 'inPort';
+
+                        if ~isempty(funNameIdx)
+                            %* Checking if rte function is generated (not generated if port is not connected)
+                            funNo = 1;
+                            while contains(headerRteData.callExp(funNameIdx(funNo)).oldFun,'Rte_Invalidate')
+                                funNo = funNo + 1;
+                            end
+
+                            %* Getting function proto based on <oldFun> in callExp 
+                            funProtoIdx = find(contains({headerRteData.funProto.funProto},headerRteData.callExp(funNameIdx(funNo)).oldFun));
+                            napp.rteGenerationData(rteNo).funProto = strrep(headerRteData.funProto(funProtoIdx(1)).funProto, headerRteData.callExp(funNameIdx(funNo)).oldFun, headerRteData.callExp(funNameIdx(funNo)).xpFun);
+
+                            funProtoIdx = find(contains({headerRteData.argNames.oldFun},headerRteData.callExp(funNameIdx(funNo)).oldFun));
+                            napp.rteGenerationData(rteNo).argName = headerRteData.argNames(funProtoIdx(1)).funArg;
+                            napp.rteGenerationData(rteNo).dataType = mdlData.rnblData(rnblNo).inportData(inpNo).baseDataType;
+                            napp.rteGenerationData(rteNo).isBus = mdlData.rnblData(rnblNo).inportData(inpNo).isBus;
+                            
+                            portSplit = strsplit(napp.rteGenerationData(rteNo).signalName,'_');
+                            portSplit = portSplit(2 : length(portSplit));
+                            napp.rteGenerationData(rteNo).varName = strjoin(portSplit,'_');
+                            
+                            portSplit = regexp(napp.rteGenerationData(rteNo).signalName,'(?<portName>\w+_(P|R))_(?<dataElem>\w+)','names');
+                            napp.rteGenerationData(rteNo).portName = portSplit.portName;
+                            napp.rteGenerationData(rteNo).dataElement = portSplit.dataElem;
+
+                            portDefValues = napp.defValueMap(napp.rteGenerationData(rteNo).portName);
+                            elemIdx = find(contains({portDefValues.elemName},napp.rteGenerationData(rteNo).dataElement));
+                            napp.rteGenerationData(rteNo).defValue = portDefValues(elemIdx).defValue;
+                        end
+                    end
+
+                    for outNo = 1 : length(mdlData.rnblData(rnblNo).outportData)
+                        funNameIdx = find(contains({headerRteData.callExp.oldFun},mdlData.rnblData(rnblNo).outportData(outNo).portName));
+                        rteNo = length(napp.rteGenerationData) + 1;
+                        
+                        napp.rteGenerationData(rteNo).signalName = mdlData.rnblData(rnblNo).outportData(outNo).portName;
+                        napp.rteGenerationData(rteNo).portType = 'outPort';
+
+                        if ~isempty(funNameIdx)
+                            %* Checking if rte function is generated (not generated if port is not connected)
+                            funNo = 1;
+                            while contains(headerRteData.callExp(funNameIdx(funNo)).oldFun,'Rte_Invalidate')
+                                funNo = funNo + 1;
+                            end
+
+                            %* Getting function proto based on <oldFun> in callExp 
+                            funProtoIdx = find(contains({headerRteData.funProto.funProto},headerRteData.callExp(funNameIdx(funNo)).oldFun));
+                            napp.rteGenerationData(rteNo).funProto = strrep(headerRteData.funProto(funProtoIdx(1)).funProto, headerRteData.callExp(funNameIdx(funNo)).oldFun, headerRteData.callExp(funNameIdx(funNo)).xpFun);
+
+                            funProtoIdx = find(contains({headerRteData.argNames.oldFun},headerRteData.callExp(funNameIdx(funNo)).oldFun));
+                            napp.rteGenerationData(rteNo).argName = headerRteData.argNames(funProtoIdx(1)).funArg;
+                            napp.rteGenerationData(rteNo).dataType = mdlData.rnblData(rnblNo).outportData(outNo).baseDataType;
+                            napp.rteGenerationData(rteNo).isBus = mdlData.rnblData(rnblNo).outportData(outNo).isBus;
+                            
+                            portSplit = strsplit(napp.rteGenerationData(rteNo).signalName,'_');
+                            portSplit = portSplit(2 : length(portSplit));
+                            napp.rteGenerationData(rteNo).varName = strjoin(portSplit,'_');
+                            
+                            portSplit = regexp(napp.rteGenerationData(rteNo).signalName,'(?<portName>\w+_(P|R))_(?<dataElem>\w+)','names');
+                            napp.rteGenerationData(rteNo).portName = portSplit.portName;
+                            napp.rteGenerationData(rteNo).dataElement = portSplit.dataElem;
+
+                            portDefValues = napp.defValueMap(napp.rteGenerationData(rteNo).portName);
+                            elemIdx = find(contains({portDefValues.elemName},napp.rteGenerationData(rteNo).dataElement));
+                            napp.rteGenerationData(rteNo).defValue = portDefValues(elemIdx).defValue;
+                        end
+                    end
+
+                    for glbNo = 1 : length(mdlData.glbConfig)
+                        funNameIdx = find(contains({headerRteData.callExp.oldFun},mdlData.glbConfig(glbNo).name));
+                        rteNo = length(napp.rteGenerationData) + 1;
+                        
+                        napp.rteGenerationData(rteNo).signalName = mdlData.glbConfig(glbNo).name;
+                        napp.rteGenerationData(rteNo).portType = 'glbConfig';
+
+                        %* Getting function proto based on <oldFun> in callExp 
+                        funProtoIdx = find(contains({glbConfigRteData.paramDef.paramFun},headerRteData.callExp(funNameIdx(1)).oldFun));
+                        napp.rteGenerationData(rteNo).funProto = regexprep(glbConfigRteData.paramDef(funProtoIdx(1)).paramFun, [headerRteData.callExp(funNameIdx(funNo)).oldFun '\s*('], [headerRteData.callExp(funNameIdx(funNo)).xpFun '(']);
+
+                        
+                        napp.rteGenerationData(rteNo).dataType = mdlData.glbConfig(glbNo).baseDataType;
+                        
+                        
+                        portSplit = strsplit(napp.rteGenerationData(rteNo).signalName,'_');
+                        portSplit = portSplit(2 : length(portSplit));
+                        napp.rteGenerationData(rteNo).varName = strjoin(portSplit,'_');
+                        
+                        glbConfDataIdx = find(contains({glbConfigRteData.retNames.oldFun},headerRteData.callExp(funNameIdx(1)).oldFun));
+                        napp.rteGenerationData(rteNo).funProto = strrep(napp.rteGenerationData(rteNo).funProto, glbConfigRteData.retNames(glbConfDataIdx(1)).retVar, napp.rteGenerationData(rteNo).varName);
+
+                        portSplit = regexp(napp.rteGenerationData(rteNo).signalName,'(?<portName>\w+_(P|R))_(?<dataElem>\w+)','names');
+                        napp.rteGenerationData(rteNo).portName = portSplit.portName;
+                        napp.rteGenerationData(rteNo).dataElement = portSplit.dataElem;
+
+                        napp.rteGenerationData(rteNo).defValue = mdlData.glbConfig(glbNo).arxmlValue;
+                    end
+                end
+            end
+
+            %? sorting structure
+            [~,sortedIdx] = sort({napp.rteGenerationData.portType});
+            napp.rteGenerationData = napp.rteGenerationData(sortedIdx);
         end
 
         function tmpMat(napp, writeData)
             cd(napp.dstPath);
-            if exist('RootSWComposition_IntegrationData.mat')
+            
+            if writeData == 1
+                arxmlData.allASWCmp = napp.allASWCmp;
+                arxmlData.delConMap = napp.delConMap;
+                arxmlData.asmConn = napp.asmConn;
+                arxmlData.dataTypeMap = napp.dataTypeMap;
+                arxmlData.idtrStructMap = napp.idtrStructMap;
+                arxmlData.defValueMap = napp.defValueMap;
+                arxmlData.glbConfigMap = napp.glbConfigMap;
+                modelData.allMdlData = napp.allMdlData;
+                save('RootSWComposition_IntegrationData.mat','arxmlData','modelData');
+            elseif exist('RootSWComposition_IntegrationData.mat')
                 matVariables = load('RootSWComposition_IntegrationData.mat');
                 napp.allASWCmp = matVariables.arxmlData.allASWCmp;
                 napp.delConMap = matVariables.arxmlData.delConMap;
@@ -559,15 +728,10 @@ classdef codeIntegration < handle
                 napp.idtrStructMap = matVariables.arxmlData.idtrStructMap;
                 napp.defValueMap = matVariables.arxmlData.defValueMap;
                 napp.glbConfigMap = matVariables.arxmlData.glbConfigMap;
-            elseif writeData == 1
-                arxmlData.allASWCmp = napp.allASWCmp;
-                arxmlData.delConMap = napp.delConMap;
-                arxmlData.asmConn = napp.asmConn;
-                arxmlData.dataTypeMap = napp.dataTypeMap;
-                arxmlData.idtrStructMap = napp.idtrStructMap;
-                arxmlData.defValueMap = napp.defValueMap;
-                arxmlData.glbConfigMap = napp.glbConfigMap;
-                save('RootSWComposition_IntegrationData.mat','arxmlData');
+                matNames = who('-file', 'RootSWComposition_IntegrationData.mat');
+                if ismember('modelData', matNames)
+                    napp.allMdlData = matVariables.modelData.allMdlData; 
+                end
             end
         end
     end
