@@ -170,7 +170,7 @@ classdef reqAnalysis < handle
                         goTo = 0;
                     end
                 end
-                if ~isempty(regexp(napp.reqSentences{napp.docIdx},'^Table of Contents','ONCE'))
+                if ~isempty(regexp(napp.reqSentences{napp.docIdx},'^Table of Contents','ONCE')) || ~isempty(regexp(napp.reqSentences{napp.docIdx},'^Contents','ONCE'))
                     %disp('Found Table of Contents');
                     exitWhile = 0;
                 end
@@ -343,23 +343,29 @@ classdef reqAnalysis < handle
             Ex_range.Value = 'Error Flags';
             Ex_range.Interior.ColorIndex = 20;
 
-            for reqNo = 1 : length(napp.revReq)
-                waitbar((reqNo / length(napp.revReq))*(0.5),napp.progBar,{'Exporting results to Excel','Current Revision',napp.revReq(reqNo).Revision});
-                Ex_range = Ex_range.get('Offset',1,-4);
-                Ex_range.Value = napp.revReq(reqNo).ReqID;
-                Ex_range = Ex_range.get('Offset',0,1);
-                Ex_range.Value = napp.revReq(reqNo).Revision;
-                Ex_range = Ex_range.get('Offset',0,1);
-                Ex_range.Value = napp.revReq(reqNo).Tag;
-                Ex_range = Ex_range.get('Offset',0,1);
-                Ex_range.Value = napp.revReq(reqNo).Found;
-                Ex_range = Ex_range.get('Offset',0,1);
-                Ex_range.Value = napp.revReq(reqNo).ErrFlg;
-            end
+            Ex_range = get(Ex_actSheet,'Range',sprintf('A2:E%d',(length(napp.revReq) + 1)));
+            Ex_range.value = reshape(struct2cell(napp.revReq),5,length(napp.revReq))';
+            % for reqNo = 1 : length(napp.revReq)
+            %     waitbar((reqNo / length(napp.revReq))*(0.5),napp.progBar,{'Exporting results to Excel','Current Revision',napp.revReq(reqNo).Revision});
+            %     Ex_range = Ex_range.get('Offset',1,-4);
+            %     Ex_range.Value = napp.revReq(reqNo).ReqID;
+            %     Ex_range = Ex_range.get('Offset',0,1);
+            %     Ex_range.Value = napp.revReq(reqNo).Revision;
+            %     Ex_range = Ex_range.get('Offset',0,1);
+            %     Ex_range.Value = napp.revReq(reqNo).Tag;
+            %     Ex_range = Ex_range.get('Offset',0,1);
+            %     Ex_range.Value = napp.revReq(reqNo).Found;
+            %     Ex_range = Ex_range.get('Offset',0,1);
+            %     Ex_range.Value = napp.revReq(reqNo).ErrFlg;
+            % end
+
+            waitbar(0.33,napp.progBar,{'Exporting results to Excel'});
+            reqNo = length(napp.revReq);
             Ex_actSheet.Range(sprintf('A1:%s%d',(65 + 4),(reqNo + 2))).Borders.Item('xlInsideHorizontal').LineStyle = 1;
             Ex_actSheet.Range(sprintf('A1:%s%d',(65 + 5),(reqNo + 1))).Borders.Item('xlInsideVertical').LineStyle = 1;
 
-            Ex_range = Ex_range.get('Offset',1,-(4));
+            % Ex_range = Ex_range.get('Offset',1,-(4));
+            Ex_range = get(Ex_actSheet,'Range','A1');
             for reqNo = 1:5
                 Ex_range.EntireColumn.AutoFit;
                 Ex_range = Ex_range.get('Offset',0,1);
@@ -398,37 +404,52 @@ classdef reqAnalysis < handle
             Ex_range.Value = 'Exp Revisions';
             Ex_range.Interior.ColorIndex = 20;
             
-            for reqNo = 1 : length(napp.Requirements)
-                waitbar(0.5+(reqNo / length(napp.Requirements))*(0.5),napp.progBar,{'Exporting results to Excel','Current Requirement ID',regexprep(napp.Requirements(reqNo).ReqID,'_','\\_')});
-                Ex_range = Ex_range.get('Offset',1,-(6 + napp.revNo));
-                Ex_range.Value = napp.Requirements(reqNo).ReqID;
-                Ex_range = Ex_range.get('Offset',0,1);
-                Ex_range.Value = napp.Requirements(reqNo).Revs;
-                for revIdx = 1 : napp.revNo
-                    Ex_range = Ex_range.get('Offset',0,1);
-                    Ex_range.Value = napp.Requirements(reqNo).Revisions(revIdx);
-                end
-                Ex_range = Ex_range.get('Offset',0,1);
-                Ex_range.Value = napp.Requirements(reqNo).Usage;
-                Ex_range = Ex_range.get('Offset',0,1);
-                Ex_range.Value = napp.Requirements(reqNo).Found;
-                Ex_range = Ex_range.get('Offset',0,1);
-                Ex_range.Value = napp.Requirements(reqNo).TagErr;
-                Ex_range = Ex_range.get('Offset',0,1);
-                Ex_range.Value = napp.Requirements(reqNo).RevErr;
-                Ex_range = Ex_range.get('Offset',0,1);
-                Ex_range.Value = napp.Requirements(reqNo).ExpRev;
-            end
+            % for reqNo = 1 : length(napp.Requirements)
+            %     waitbar(0.5+(reqNo / length(napp.Requirements))*(0.5),napp.progBar,{'Exporting results to Excel','Current Requirement ID',regexprep(napp.Requirements(reqNo).ReqID,'_','\\_')});
+            %     Ex_range = Ex_range.get('Offset',1,-(6 + napp.revNo));
+            %     Ex_range.Value = napp.Requirements(reqNo).ReqID;
+            %     Ex_range = Ex_range.get('Offset',0,1);
+            %     Ex_range.Value = napp.Requirements(reqNo).Revs;
+            %     for revIdx = 1 : napp.revNo
+            %         Ex_range = Ex_range.get('Offset',0,1);
+            %         Ex_range.Value = napp.Requirements(reqNo).Revisions(revIdx);
+            %     end
+            %     Ex_range = Ex_range.get('Offset',0,1);
+            %     Ex_range.Value = napp.Requirements(reqNo).Usage;
+            %     Ex_range = Ex_range.get('Offset',0,1);
+            %     Ex_range.Value = napp.Requirements(reqNo).Found;
+            %     Ex_range = Ex_range.get('Offset',0,1);
+            %     Ex_range.Value = napp.Requirements(reqNo).TagErr;
+            %     Ex_range = Ex_range.get('Offset',0,1);
+            %     Ex_range.Value = napp.Requirements(reqNo).RevErr;
+            %     Ex_range = Ex_range.get('Offset',0,1);
+            %     Ex_range.Value = napp.Requirements(reqNo).ExpRev;
+            % end
 
+            reqRes = {napp.Requirements.ReqID}';
+            reqRes = [reqRes {napp.Requirements.Revs}'];
+            for revIdx = 1 : napp.revNo
+                % reqRes = [reqRes {napp.Requirements.Revisions(revIdx)}'];
+                reqRes = [reqRes num2cell(cellfun(@(v)v(revIdx),{napp.Requirements.Revisions}'))];
+            end
+            reqRes = [reqRes {napp.Requirements.Usage}' {napp.Requirements.Found}' {napp.Requirements.TagErr}' {napp.Requirements.RevErr}' {napp.Requirements.ExpRev}'];
+
+            waitbar(0.66,napp.progBar,{'Exporting results to Excel'});
+            Ex_range = get(Ex_actSheet,'Range',['A2:' 64 + 7 + napp.revNo num2str(length(napp.Requirements) + 1)]);
+            Ex_range.value = reqRes;
+
+            reqNo = length(napp.Requirements);
             Ex_actSheet.Range(sprintf('A1:%s%d',(65 + 6 + napp.revNo),(reqNo + 2))).Borders.Item('xlInsideHorizontal').LineStyle = 1;
             Ex_actSheet.Range(sprintf('A1:%s%d',(65 + 7 + napp.revNo),(reqNo + 1))).Borders.Item('xlInsideVertical').LineStyle = 1;
 
-            Ex_range = Ex_range.get('Offset',1,-(6 + napp.revNo));
+            % Ex_range = Ex_range.get('Offset',1,-(6 + napp.revNo));
+            Ex_range = get(Ex_actSheet,'Range','A1');
             for reqNo = 1: (7+ napp.revNo)
                 Ex_range.EntireColumn.AutoFit;
                 Ex_range = Ex_range.get('Offset',0,1);
             end
 
+            waitbar(1,napp.progBar,{'Exporting results to Excel'});
             Ex_Workbook.Save;
         end
     end
