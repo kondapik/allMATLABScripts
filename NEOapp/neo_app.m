@@ -47,6 +47,7 @@
             Update: checking the version of the data saved before testing
             Patch: Replaced '_Expected','_Result' and '_Actual' with '_Exp','_Res' and '_Act' to reduce signal length
     v1.5.1  Patch: Replaced use of matfile function with load and save functions to avoid data corruption
+    v1.5.2  Update: Adding support for simulink datatypes for error ports without application datatypes 
 %}
 
 classdef neo_app < matlab.apps.AppBase
@@ -112,6 +113,7 @@ classdef neo_app < matlab.apps.AppBase
         SACompts
         Comps
         AllNames
+        simDataTypes
         
         %testing properties
         rootPath
@@ -151,6 +153,7 @@ classdef neo_app < matlab.apps.AppBase
             keys = {'00000001','00000000','00000010','00000100','00001000','00001010','00001100','00010000','00010010','00010100','00011000','00011010','00011100','00100000','00100010','00100100','00101000','00101010','00101100','00110000','00110010','00110100','00111000','00111010','00111100','01000000','01001000','01001010','01001100','01010000','01010010','01010100','01011000','01011010','01011100','01100000','01101000','01101010','01101100','01110000','01110010','01110100','01111000','01111010','01111100','10000000','10001000','10001010','10001100','10010000','10010010','10010100','10011000','10011010','10011100','10100000','10101000','10101010','10101100','10110000','10110010','10110100','10111000','10111010','10111100','11000000','11001000','11001010','11001100','11010000','11010010','11010100','11011000','11011010','11011100','11100000','11101000','11101010','11101100','11110000','11110010','11110100','11111000','11111010','11111100','00100001'};
             values = {'Generate test files''^^^''Creates test case Excel, frame harness and global config file''^^^''on','Not an option''^^^''Select something, I have to get back to work.''^^^''off','Complete harness''^^^''Extract data from excel and updates harness''^^^''on','Update test cases''^^^''Updates signal builder with new test cases from excel''^^^''on','Execute MIL test''^^^''Executes MIL & updates results in Excel''^^^''on','Execute MIL test''^^^''Updates harness, executes MIL & updates results in Excel''^^^''on','Execute MIL test''^^^''Updates test cases, executes MIL & updates results in Excel''^^^''on','Execute SIL test''^^^''Executes SIL & updates results in Excel''^^^''on','Execute SIL test''^^^''Updates harness, executes SIL & updates results in Excel''^^^''on','Execute SIL test''^^^''Updates test cases, executes SIL & updates results in Excel''^^^''on','Execute MIL & SIL''^^^''Executes MIL, SIL & updates results in Excel''^^^''on','Execute MIL & SIL''^^^''Updates harness, executes MIL, SIL & updates results in Excel''^^^''on','Execute MIL & SIL''^^^''Updates test cases, executes MIL, SIL & updates results in Excel''^^^''on','Not an option''^^^''Select something, I don''t have much time''^^^''off','Complete harness''^^^''Extract data from excel and updates harness''^^^''on','Update test cases''^^^''Updates signal builder with new test cases from excel''^^^''on','Execute MIL test''^^^''Executes MIL & updates results in Excel''^^^''on','Execute MIL test''^^^''Updates harness, executes MIL & updates results in Excel''^^^''on','Execute MIL test''^^^''Updates test cases, executes MIL & updates results in Excel''^^^''on','Execute SIL with SLDV''^^^''Executes SIL with SLDV & updates results in Excel''^^^''on','Execute SIL with SLDV''^^^''Updates harness, executes SIL with SLDV & updates results in Excel''^^^''on','Execute SIL with SLDV''^^^''Updates test cases, executes SIL with SLDV & updates results in Excel''^^^''on','Execute MIL & SIL with SLDV''^^^''Executes MIL, SIL with SLDV & updates results in Excel''^^^''on','Execute MIL & SIL with SLDV''^^^''Updates harness, executes MIL, SIL with SLDV & updates results in Excel''^^^''on','Execute MIL & SIL with SLDV''^^^''Updates test cases, executes MIL, SIL with SLDV & updates results in Excel''^^^''on','Generate MIL report''^^^''Generates MIL report''^^^''on','Execute MIL test & generate report''^^^''Executes MIL, updates results in Excel & generates report''^^^''on','Execute MIL test & generate report''^^^''Updates harness, executes MIL, updates results in Excel  & generates report''^^^''on','Execute MIL test & generate report''^^^''Updates test cases, executes MIL, updates results in Excel  & generates report''^^^''on','Execute SIL test & generate MIL report''^^^''Executes SIL, updates results in Excel & generates MIL report''^^^''on','Not an option''^^^''Doesn''t work, cannot generate MIL report without MIL testing''^^^''off','Not an option''^^^''Doesn''t work, cannot generate MIL report without MIL testing''^^^''off','Execute MIL & SIL''^^^''Executes MIL, SIL, updates results in Excel & generates MIL report''^^^''on','Execute MIL & SIL''^^^''Updates harness, executes MIL, SIL & updates results in Excel''^^^''on','Execute MIL & SIL''^^^''Updates test cases, executes MIL, SIL & updates results in Excel''^^^''on','Generate MIL report''^^^''Generates MIL report''^^^''on','Execute MIL test & generate report''^^^''Executes MIL, updates results in Excel & generates report''^^^''on','Execute MIL test & generate report''^^^''Updates harness, executes MIL, updates results in Excel  & generates report''^^^''on','Execute MIL test & generate report''^^^''Updates test cases, executes MIL, updates results in Excel & generates report''^^^''on','Execute SIL test & generate MIL report''^^^''Executes SIL, updates results in Excel & generates MIL report''^^^''on','Not an option''^^^''Doesn''t work, cannot generate MIL report without MIL testing''^^^''off','Not an option''^^^''Doesn''t work, cannot generate MIL report without MIL testing''^^^''off','Execute MIL & SIL with SLDV''^^^''Executes MIL, SIL with SLDV & updates results in Excel''^^^''on','Execute MIL & SIL with SLDV''^^^''Updates harness, executes MIL, SIL with SLDV & updates results in Excel''^^^''on','Execute MIL & SIL with SLDV''^^^''Updates test cases, executes MIL, SIL with SLDV & updates results in Excel''^^^''on','Generate SIL Report''^^^''Generates SIL report''^^^''on','Execute MIL test & generate SIL report''^^^''Executes MIL, updates results in Excel & generates SIL report''^^^''on','Not an option''^^^''Doesn''t work, cannot generate SIL report without SIL testing''^^^''off','Not an option''^^^''Doesn''t work, cannot generate SIL report without SIL testing''^^^''off','Execute SIL test & generate report''^^^''Executes SIL, updates results in Excel & generates report''^^^''on','Execute SIL test & generate report''^^^''Updates harness, executes SIL, updates results in Excel  & generates report''^^^''on','Execute SIL test & generate report''^^^''Updates test cases, executes SIL, updates results in Excel  & generates report''^^^''on','Execute MIL & SIL''^^^''Executes MIL, SIL, updates results in Excel & generates SIL report''^^^''on','Execute MIL & SIL''^^^''Updates harness, executes MIL, SIL & updates results in Excel''^^^''on','Execute MIL & SIL''^^^''Updates test cases, executes MIL, SIL & updates results in Excel''^^^''on','Generate SIL report''^^^''Generates SIL report''^^^''on','Execute MIL test & generate SIL report''^^^''Executes MIL, updates results in Excel & generates SIL report''^^^''on','Not an option''^^^''Doesn''t work, cannot generate SIL report without SIL testing''^^^''off','Not an option''^^^''Doesn''t work, cannot generate SIL report without SIL testing''^^^''off','Execute SIL with SLDV''^^^''Executes SIL with SLDV, updates results in Excel & generates SIL report''^^^''on','Execute SIL with SLDV''^^^''Updates harness, executes SIL with SLDV& updates results in Excel''^^^''on','Execute SIL with SLDV''^^^''Updates test cases, executes SIL with SLDV & updates results in Excel''^^^''on','Execute MIL & SIL with SLDV''^^^''Executes MIL, SIL with SLDV updates results in Excel & generates report''^^^''on','Execute MIL & SIL with SLDV''^^^''Updates harness, executes MIL, SIL with SLDV & updates results in Excel''^^^''on','Execute MIL & SIL with SLDV''^^^''Updates test cases, executes MIL, SIL with SLDV & updates results in Excel''^^^''on','Generate MIL & SIL reports''^^^''Generate MIL & SIL reports''^^^''on','Execute MIL test & generate reports''^^^''Executes MIL, updates results in Excel & generates MIL and SIL reports''^^^''on','Not an option''^^^''Doesn''t work, cannot generate SIL report without SIL testing''^^^''off','Not an option''^^^''Doesn''t work, cannot generate SIL report without SIL testing''^^^''off','Execute SIL test & generate reports''^^^''Executes SIL, updates results in Excel & generates MIL and SIL reports''^^^''on','Not an option''^^^''Doesn''t work, cannot generate MIL report without MIL testing''^^^''off','Not an option''^^^''Doesn''t work, cannot generate MIL report without MIL testing''^^^''off','Execute MIL & SIL''^^^''Executes MIL, SIL, updates results in Excel & generates MIL and SIL reports''^^^''on','Execute MIL & SIL''^^^''Updates harness, executes MIL, SIL & updates results in Excel''^^^''on','Execute MIL & SIL''^^^''Updates test cases, executes MIL, SIL & updates results in Excel''^^^''on','Generate MIL & SIL reports''^^^''Generates MIL & SIL reports''^^^''on','Execute MIL test & generate reports''^^^''Executes MIL, updates results in Excel & generates MIL and SIL reports''^^^''on','Not an option''^^^''Doesn''t work, cannot generate SIL report without SIL testing''^^^''off','Not an option''^^^''Doesn''t work, cannot generate SIL report without SIL testing''^^^''off','Execute SIL test & generate reports''^^^''Executes SIL with SLDV, updates results in Excel & generates reports''^^^''on','Not an option''^^^''Doesn''t work, cannot generate MIL report without MIL testing''^^^''off','Not an option''^^^''Doesn''t work, cannot generate MIL report without MIL testing''^^^''off','Execute MIL & SIL with SLDV''^^^''Executes MIL, SIL with SLDV updates results in Excel & generates reports''^^^''on','Execute MIL & SIL with SLDV''^^^''Updates harness, executes MIL, SIL with SLDV & updates results in Excel''^^^''on','Execute MIL & SIL with SLDV''^^^''Updates test cases, executes MIL, SIL with SLDV & updates results in Excel''^^^''on','Create Excel''^^^''Creates test case Excel and frame harness''^^^''on'};
             app.optionsMap = containers.Map(keys,values);
+            app.simDataTypes = {'double','single','int8','uint8','int16','uint16','int32','uint32','int64','uint64','boolean'};
         end
 
         %
@@ -824,9 +827,13 @@ classdef neo_app < matlab.apps.AppBase
                     else
                         app.port_data(signalNo).defValue = '0';
                         if app.AUTOSAR_stat == 1
-                            entryObj = getEntry(DataDictSec,app.port_data(signalNo).OutDataType);
-                            aliasValue = getValue(entryObj);
-                            app.port_data(signalNo).BaseDataType = aliasValue.BaseType;
+                            if isempty(find(ismember(app.simDataTypes,app.port_data(signalNo).OutDataType)))
+                                entryObj = getEntry(DataDictSec,app.port_data(signalNo).OutDataType);
+                                aliasValue = getValue(entryObj);
+                                app.port_data(signalNo).BaseDataType = aliasValue.BaseType;
+                            else
+                                app.port_data(signalNo).BaseDataType = app.port_data(signalNo).OutDataType;
+                            end
                         else
                             if ~isequal(app.port_data(signalNo).OutDataType,'Inherit: auto')
                                 app.port_data(signalNo).BaseDataType = app.port_data(signalNo).OutDataType;
@@ -847,9 +854,13 @@ classdef neo_app < matlab.apps.AppBase
                 app.port_data(signalNo).OutDataType = portType;
                 app.port_data(signalNo).defValue = '0';
                 if app.AUTOSAR_stat == 1
-                    entryObj = getEntry(DataDictSec,app.port_data(signalNo).OutDataType);
-                    aliasValue = getValue(entryObj);
-                    app.port_data(signalNo).BaseDataType = aliasValue.BaseType;
+                    if isempty(find(ismember(app.simDataTypes,app.port_data(signalNo).OutDataType)))
+                        entryObj = getEntry(DataDictSec,app.port_data(signalNo).OutDataType);
+                        aliasValue = getValue(entryObj);
+                        app.port_data(signalNo).BaseDataType = aliasValue.BaseType;
+                    else
+                        app.port_data(signalNo).BaseDataType = app.port_data(signalNo).OutDataType;
+                    end
                 else
                     if ~isequal(app.port_data(signalNo).OutDataType,'Inherit: auto')
                         app.port_data(signalNo).BaseDataType = app.port_data(signalNo).OutDataType;
@@ -3087,7 +3098,7 @@ classdef neo_app < matlab.apps.AppBase
             app.NEO = uifigure;
             app.NEO.AutoResizeChildren = 'off';
             app.NEO.Position = [100 100 618 351];
-            app.NEO.Name = 'Testing and frame generation app (NEO 1.5.1)';
+            app.NEO.Name = 'Testing and frame generation app (NEO 1.5.2)';
             app.NEO.Resize = 'off';
 
             % Create Features
