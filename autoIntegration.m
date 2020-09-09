@@ -4,13 +4,14 @@
 %
     CREATED BY : Kondapi V S Krishna Prasanth
     DATE OF CREATION: 12-Nov-2019
-    LAST MODIFIED: 16-Nov-2019
+    LAST MODIFIED: 26-May-2020
 %
     VERSION MANAGER
     v1      Completes Step 1 and Step 2 of integration procedure
     v1.1    Checks for input signals to all referenced models not just InProc
     v1.2    InProc_Misc and OutProc_Misc support with nvmFlg saved to mat file
-            Copies user created Enum definitions to root param data dictionary 
+            Copies user created Enum definitions to root param data dictionary
+    v1.3    Fix: Updated function caller inport and outport names to include function name
 %}
 
 
@@ -77,7 +78,7 @@ classdef autoIntegration < handle
             cd ../
             currFolder = pwd;
 
-            napp.progBar = waitbar(0,{'Copying source files(1/5)','Collecting file details...'},'Name','ASW Integration');
+            napp.progBar = waitbar(0,{'Copying source files(1/5)','Collecting file details...'},'Name','ASW Integration (v1.3)');
             folderNo = 1;
             while folderNo
                 [status, msg, ~] = mkdir(sprintf('IntegratedSoftware_%d',folderNo));
@@ -542,7 +543,7 @@ classdef autoIntegration < handle
                     allArgIn = find_system(sprintf('RootSWComposition/%s/%s',funcData(funcNo).subSystem,functionName),'BlockType','ArgIn');
                     for inpNo = 1:length(inputArg)
                         dataType = strtrim(inData{inpNo});
-                        portName = sprintf('%s_%s_%s',prefix,inputArg{inpNo},suffix);
+                        portName = sprintf('%s_%s_%s_%s',prefix,functionName,inputArg{inpNo},suffix);
                         set_param(allArgIn{inpNo},'Name',inputArg{inpNo},'ArgumentName',inputArg{inpNo},'OutDataTypeStr',dataType(3:end),...
                                         'Position', [funcPosition(3)+10 funcPosition(4)+inpNo*60 funcPosition(3)+110 funcPosition(4)+inpNo*60+30]);
                         if isequal(funcData(funcNo).srcBlocks{inpNo},'Ground')
@@ -567,7 +568,7 @@ classdef autoIntegration < handle
                     allArgOut = find_system(sprintf('RootSWComposition/%s/%s',funcData(funcNo).subSystem,functionName),'BlockType','ArgOut');
                     for outNo = 1:length(outputArg)
                         dataType = strtrim(outData{outNo});
-                        portName = sprintf('%s_%s_%s',prefix,outputArg{outNo},suffix);
+                        portName = sprintf('%s_%s_%s_%s',prefix,functionName,outputArg{outNo},suffix);
                         set_param(allArgOut{outNo},'Name',outputArg{outNo},'ArgumentName',outputArg{outNo},'OutDataTypeStr',dataType(3:end),...
                                     'Position', [funcPosition(3)-110 funcPosition(4)+outNo*60 funcPosition(3)-10 funcPosition(4)+outNo*60+30]);
                         if isequal(funcData(funcNo).dstBlocks{outNo},'Terminator')

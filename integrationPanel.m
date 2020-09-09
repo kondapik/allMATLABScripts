@@ -208,11 +208,12 @@ classdef integrationPanel < matlab.apps.AppBase
 
                     if app.nvmFlg == 0
                         app.ConfigurationDropDownLabel.Text = 'without NvM';
-                        confEntry = find(app.DataSectObj,'Name','ADTS_EVSEComProto');
+                        %confEntry = find(app.DataSectObj,'Name','ADTS_EVSEComProto');
                     else
                         app.ConfigurationDropDownLabel.Text = 'with NvM';
-                        confEntry = find(app.DataSectObj,'Name','ADTS_EVSEComProtoE');
+                        %confEntry = find(app.DataSectObj,'Name','ADTS_EVSEComProtoE');
                     end
+                    confEntry = find(app.DataSectObj,'Name','ADTS_EVSEComProto');
                     confEnum = getValue(confEntry);
                     confValues = confEnum.Enumerals;
                     app.ConfigurationDropDown.Items = {confValues.Name};
@@ -746,17 +747,18 @@ classdef integrationPanel < matlab.apps.AppBase
                     aliasValue = getValue(entryObj);
                     set_param(sprintf('%s/%s_Constant',app.OnlyModelName,app.constNames{inpNo}),'Value',sprintf('%s.%s',dataType(7:end),aliasValue.DefaultValue));
                     app.inTableData{inpNo,2} = aliasValue.DefaultValue;
-                    if app.nvmFlg == 1 && isequal(app.constNames{inpNo},'IM_EVSEComProto_R_EVSEComProto')
+                    if app.nvmFlg == 1 && isequal(app.constNames{inpNo},'IM_EVSEComProto_R_EVSEComProto_NvData')
                         app.ConfigurationDropDown.Value = aliasValue.DefaultValue;
                     end
                 end
             end
-            if app.nvmFlg == 0
-                app.PhaseButton.Text = 'SinglePhase';
-            else
-                app.PhaseButton.Text = 'SinglePhaseE';
-            end
-            pp.PhaseButton.Value = 0;
+            % if app.nvmFlg == 0
+            %     app.PhaseButton.Text = 'SinglePhase';
+            % else
+            %     app.PhaseButton.Text = 'SinglePhaseE';
+            % end
+            app.PhaseButton.Text = 'SinglePhase';
+            app.PhaseButton.Value = 0;
             app.InputTable.Data = app.inTableData;
         end
 
@@ -769,17 +771,19 @@ classdef integrationPanel < matlab.apps.AppBase
             prog_stat = uiprogressdlg(app.simPanel,'Title','Updating Configuration',...
                                 'Message','Updating charging phase...','Indeterminate','on');
             if app.PhaseButton.Value == 0
-                if app.nvmFlg == 0
-                    app.PhaseButton.Text = 'SinglePhase';
-                else
-                    app.PhaseButton.Text = 'SinglePhaseE';
-                end
+                % if app.nvmFlg == 0
+                %     app.PhaseButton.Text = 'SinglePhase';
+                % else
+                %     app.PhaseButton.Text = 'SinglePhaseE';
+                % end
+                app.PhaseButton.Text = 'SinglePhase';
             else
-                if app.nvmFlg == 0
-                    app.PhaseButton.Text = 'ThreePhase';
-                else
-                    app.PhaseButton.Text = 'ThreePhaseE';
-                end
+                % if app.nvmFlg == 0
+                %     app.PhaseButton.Text = 'ThreePhase';
+                % else
+                %     app.PhaseButton.Text = 'ThreePhaseE';
+                % end
+                app.PhaseButton.Text = 'ThreePhase';
             end
 
             if app.nvmFlg == 0
@@ -787,9 +791,9 @@ classdef integrationPanel < matlab.apps.AppBase
                 confParam = getValue(confEntry);
                 confParam.Value = eval(sprintf('ADTS_GCSChgPhConfg.%s',app.PhaseButton.Text));
                 setValue(confEntry,confParam);
-                saveChanges(app.DataDictObj);  
+                saveChanges(app.DataDictObj);
             else
-                updateSignalValue(app,'IM_SChgPhConfg_R_SChgPhConfg',app.PhaseButton.Text);
+                updateSignalValue(app,'IM_SChgPhConfg_R_SCPC_NvData',app.PhaseButton.Text);
             end
             drawnow
             close(prog_stat);
@@ -807,7 +811,7 @@ classdef integrationPanel < matlab.apps.AppBase
                 setValue(confEntry,confParam);
                 saveChanges(app.DataDictObj);  
             else
-                updateSignalValue(app,'IM_EVSEComProto_R_EVSEComProto',app.ConfigurationDropDown.Value);
+                updateSignalValue(app,'IM_EVSEComProto_R_EVSEComProto_NvData',app.ConfigurationDropDown.Value);
             end
             save_system(app.OnlyModelName);
             close(prog_stat);
