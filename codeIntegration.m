@@ -40,6 +40,8 @@ classdef codeIntegration < handle
     properties (Access = public)
         %LetsPutASmileOnThatFace = 'ok?';
         AnnieAreYouOk = 'maybe?';
+        
+        missingPorts = struct('rnblName',{} ,'signalName',{} ,'portType',{}); %! Sneak peak code
     end
 
     methods (Access = public)
@@ -52,9 +54,14 @@ classdef codeIntegration < handle
             % napp.integPath = uigetdir(currFolder,'Select path to save integrated model');
 
             napp.arxmlName = 'RootSWComposition.arxml';
-            napp.arxmlPath = 'D:\R0019983\Branches\OBC_A3_1\20_Design\ASW\SW_Composition_ARXML';
-            napp.sourcePath = 'D:\R0019983\Branches\OBC_A3_1\30_Software\Source\ASW';
-            napp.integPath = 'D:\Temp_Project\ASW_Integration\integrationBuildTest';
+            % napp.arxmlPath = 'D:\R0019983\Branches\OBC_A3_1\20_Design\ASW\SW_Composition_ARXML';
+            % napp.sourcePath = 'D:\R0019983\Branches\OBC_A3_1\30_Software\Source\ASW';
+            % napp.integPath = 'D:\Temp_Project\ASW_Integration\integrationBuildTest';
+            % napp.integPath = 'D:\MATLAB\ASW_Integration\integrationBuildTest';
+
+            napp.arxmlPath = 'D:\R0019983\Branches\OBC_A4\20_Design\ASW\SW_Composition_ARXML';
+            napp.sourcePath = 'D:\R0019983\Branches\OBC_A4\30_Software\Source\ASW';
+            napp.integPath = 'D:\MATLAB\ASW_Integration\a4BuildTest';
 
             %disp(napp.framePath);
             if isequal(napp.integPath,0) ||  isequal(napp.sourcePath,0) || isequal(napp.arxmlPath,0)
@@ -119,6 +126,8 @@ classdef codeIntegration < handle
             allApp = xDoc.getElementsByTagName('SW-COMPONENT-PROTOTYPE');
             napp.allASWCmp = struct('cmpName',{},'refPath',{});
             %exclName = {'InProc';'IoHwAb_Composition';'OutProc';'ECU_ECUC_CTP_Base_AR4x'};
+            cmpBlackList = {'EcuM', 'BSW_components', 'IoHwAb_Adc_SWC', 'IoHwAb_Dio_SWC', 'IoHwAb_Icu_SWC', 'IoHwAb_Pwm_SWC', 'Bswm', 'CDD_BSW', 'CDD_CHAdeMO', 'CDD_GBT', 'CDD_SBC',...
+                             'CDD_V2G', 'Dcm', 'GlbConfg', 'NvBlockSwc_Appl', 'Dem', 'NvBlockSwc_V2G', 'ComM', 'Det', 'NvM'};
             for appNo  = 0 : allApp.getLength - 1
                 waitbar(0.1*(appNo/(allApp.getLength - 1)),napp.progBar,{'Reading root ARXML(1/5)',sprintf('Collecting ASW component names...')});
 
@@ -127,7 +136,7 @@ classdef codeIntegration < handle
                 
             %     applName = allApp.item(i).getElementsByTagName('SHORT-NAME');
             %     findIdx = find(contains(exclName,char(applName.item(0).getFirstChild.getData)));
-                if isequal(tgt{3},'BSW_components') || isequal(tgt{2},'SwCompositions')
+                if ~isempty(find(contains(cmpBlackList, tgt{3}), 1)) || isequal(tgt{2},'SwCompositions')
                 else
                     appName = allApp.item(appNo).getElementsByTagName('TYPE-TREF');
                     napp.allASWCmp(length(napp.allASWCmp) + 1).refPath = char(appName.item(0).getFirstChild.getData);
@@ -211,9 +220,26 @@ classdef codeIntegration < handle
             napp.dataTypeMap = containers.Map();
 
             for dataNo  = 0 : allDataTypes.getLength - 1
-                waitbar(0.4 + 0.1*(dataNo/(allDataTypes.getLength - 1)),napp.progBar,{'Reading root ARXML(1/5)',sprintf('Mapping base data types...')});
+                waitbar(0.4 + 0.075*(dataNo/(allDataTypes.getLength - 1)),napp.progBar,{'Reading root ARXML(1/5)',sprintf('Mapping base data types...')});
 
                 adtsType = allDataTypes.item(dataNo).getElementsByTagName('APPLICATION-DATA-TYPE-REF');
+                if adtsType.getLength
+                    adtsType = strsplit(char(adtsType.item(0).getFirstChild.getData),'/');
+
+                    impType = allDataTypes.item(dataNo).getElementsByTagName('IMPLEMENTATION-DATA-TYPE-REF');
+                    impType = strsplit(char(impType.item(0).getFirstChild.getData),'/');
+
+                    napp.dataTypeMap(adtsType{length(adtsType)}) = impType{length(impType)};
+                end
+            end
+
+            %? Base data type map for mode request data types
+            allDataTypes = xDoc.getElementsByTagName('MODE-REQUEST-TYPE-MAP');
+
+            for dataNo  = 0 : allDataTypes.getLength - 1
+                waitbar(0.475 + 0.025*(dataNo/(allDataTypes.getLength - 1)),napp.progBar,{'Reading root ARXML(1/5)',sprintf('Mapping base data types...')});
+
+                adtsType = allDataTypes.item(dataNo).getElementsByTagName('MODE-GROUP-REF');
                 if adtsType.getLength
                     adtsType = strsplit(char(adtsType.item(0).getFirstChild.getData),'/');
 
@@ -296,7 +322,12 @@ classdef codeIntegration < handle
                 portName = char(portName.item(0).getFirstChild.getData);
             
                 if isequal(portName(1:3),'NV_')
-                    napp.defValueMap(portName) = nvSpecMap([portName(4 : length(portName) - 2) '_BD']);
+                    if isKey(nvSpecMap, [portName(4 : length(portName) - 2) '_BD'])
+                        napp.defValueMap(portName) = nvSpecMap([portName(4 : length(portName) - 2) '_BD']);
+                    else
+                        napp.defValueMap(portName) = 0;
+                        fprintf('Default of ''%s'' NV port not found, giving value of 0\n', portName)
+                    end
                 else
                     portElements = allPortSpec.item(portNo).getElementsByTagName('NONQUEUED-RECEIVER-COM-SPEC');
                     initValue = allPortSpec.item(portNo).getElementsByTagName('INIT-VALUE');
@@ -338,7 +369,12 @@ classdef codeIntegration < handle
                 portName = char(portName.item(0).getFirstChild.getData);
 
                 if isequal(portName(1:3),'NV_')
-                    napp.defValueMap(portName) = nvSpecMap([portName(4 : length(portName) - 2) '_BD']);
+                    if isKey(nvSpecMap, [portName(4 : length(portName) - 2) '_BD'])
+                        napp.defValueMap(portName) = nvSpecMap([portName(4 : length(portName) - 2) '_BD']);
+                    else
+                        napp.defValueMap(portName) = 0;
+                        fprintf('Default of ''%s'' NV port not found, giving value of 0\n', portName)
+                    end
                 else
                     portElements = allPortSpec.item(portNo).getElementsByTagName('NONQUEUED-SENDER-COM-SPEC');
                     initValue = allPortSpec.item(portNo).getElementsByTagName('INIT-VALUE');
@@ -399,6 +435,8 @@ classdef codeIntegration < handle
         function collectModelData(napp)
             napp.allMdlData = containers.Map();
 
+            simDataTypes = {'double','single','int8','uint8','int16','uint16','int32','uint32','int64','uint64','boolean'};
+
             waitbar(0,napp.progBar,{'Collecting model data(2/5)',sprintf('Loading model...')});
             for cmpNo = 1 : length(napp.allASWCmp)
             % for cmpNo = 12
@@ -417,11 +455,19 @@ classdef codeIntegration < handle
                 mdlData = struct('rnblData',{},'glbConfig',{},'funcData',{});
                 rnblData = struct('rnblName',{},'inportData',{},'outportData',{},'sampleTime',{});
                 
+                % slMap = autosar.api.getSimulinkMapping(gcs)
+                % [arPortName,arDataElementName,arDataAccessMode]=getInport(slMap,inprocICAN(2).signalName) %ErrorStatus -> for error messages -> RTE_E_TIMEOUT (uint8 - 64)
+                % [arPortName,arDataElementName,arDataAccessMode]=getOutport(slMap,inprocICAN(1).signalName)
+                % [arPortName,arOperationName]=getFunctionCaller(slMap,get_param(gcb,'name'))
+                % arDataAccessMode -> 'ErrorStatus'
+
+                autosarMap = autosar.api.getSimulinkMapping(cmpName);
+
                 waitbar(((cmpNo-1)/length(napp.allASWCmp)) + (0.1/length(napp.allASWCmp)),napp.progBar,{'Collecting model data(2/5)',sprintf('Reading port data of ''%s'' model...',regexprep(cmpName,'_','\\_'))});
                 for rnblNo = 1 : length(mdlRnbls)
                     %? initializing structures
-                    inportData = struct('portName',{},'appDataType',{},'baseDataType',{},'isBus',{});
-                    outportData = struct('portName',{},'appDataType',{},'baseDataType',{},'isBus',{});
+                    inportData = struct('signalName',{},'portName',{},'dataElementName',{},'retError',{},'appDataType',{},'baseDataType',{},'isBus',{});
+                    outportData = struct('signalName',{},'portName',{},'dataElementName',{},'retError',{},'appDataType',{},'baseDataType',{},'isBus',{});
                     %? Collect port data
                     portConn = get_param(mdlRnbls{rnblNo},'PortConnectivity');
                     for portNo = 1 : length(portConn)
@@ -440,11 +486,11 @@ classdef codeIntegration < handle
                                     portHandle = gotoPort(1).SrcBlock;
                                 end
                                 inportNo = length(inportData) + 1;
-                                inportData = napp.getPortData(inportData, inportNo, portHandle, napp.dataTypeMap);
+                                inportData = napp.getPortData(inportData, inportNo, portHandle, autosarMap, napp.dataTypeMap, simDataTypes);
                             else
                                 %* Collecting outport Data
                                 outportNo = length(outportData) + 1;
-                                outportData = napp.getPortData(outportData, outportNo, portConn(portNo).DstBlock, napp.dataTypeMap);
+                                outportData = napp.getPortData(outportData, outportNo, portConn(portNo).DstBlock, autosarMap, napp.dataTypeMap, simDataTypes);
                             end
                         end
                     end
@@ -476,6 +522,7 @@ classdef codeIntegration < handle
                     %* Collecting output arguments
                     outArg = regexp(funcData(calNo).functionProto,'\[*(?<ouArg>,*\w*)*\]*(?=( = ))','names');
                     outArg = outArg{1};
+                    
                     if ~isempty(outArg)
                         outputArg = outArg.ouArg;
                         funcData(calNo).outArg = strsplit(outputArg,',');
@@ -590,8 +637,8 @@ classdef codeIntegration < handle
                 Simulink.data.dictionary.closeAll
             end
 
-            %! Saving autosar data in matFile
-            tmpMat(napp, 1);
+            %! Saving model data in matFile
+            tmpMat(napp, 2);
         end
 
         function readRteFiles(napp)
@@ -599,6 +646,11 @@ classdef codeIntegration < handle
 
             % (?<funProto>Std_ReturnType\s*\w*\s*\(\s*(const)*\s*\w*\**\s*\w*\)) -> get only function prototype
             % Std_ReturnType\s*(?<oldFun>\w*)\s*\(\s*(const)*\s*\w*\**\s*(?<funArg>\w*)\) -> get funName and arg
+
+            % (?<funProto>Std_ReturnType\s*\w*\s*\(\s*(const)*\s*(,*\s*\w+\**\s*\w*){1,}\))
+            % Std_ReturnType\s*(?<oldFun>\w*)\s*\(\s*(const)*\s*(?<funArg>(,*\s*\w+\**\s*\w*){1,})\)
+            % \s*(const)*\s*(?<dataType>\w*)\**\s*(?<argName>\w*) -> get data type and argument name from delimited function argument
+            %* if needed check if argument is 'void' (after removing trailing spaces)...
             %! (?<funProto>Std_ReturnType\s*(?<oldFun>\w*)\s*\(\s*(const)*\s*\w*\**\s*(?<funArg>\w*)\)) -> get function prototype (doesn't work -> MATLAB doesn't support nested tokens)
 
             % (?<paramFun>\w*\s*\w*\s*\(\w*\)\s*{\s*return\s*\w*;\s*}) -> get only parameter function definition
@@ -611,7 +663,7 @@ classdef codeIntegration < handle
 
             napp.rnblRteData = containers.Map();
             % [~,I] = sort({<structName>.<fieldName>}); & <structName> = <structName>(I); %* To sort a structure
-
+            
             cd(napp.integPath);
             for cmpNo = 1 : length(napp.allASWCmp)
             % for cmpNo = 12
@@ -638,8 +690,8 @@ classdef codeIntegration < handle
 
                 %* collecting rte function data from 'Rte_<modelName>.h'
                 data = fileread([napp.integPath '\' cmpName '_autosar_rtw\Rte_' cmpName '.h']);
-                headerRteData(1).funProto = regexp(data,'(?<funProto>Std_ReturnType\s*\w*\s*\(\s*(const)*\s*\w*\**\s*\w*\))','names');
-                headerRteData(1).argNames = regexp(data,'Std_ReturnType\s*(?<oldFun>\w*)\s*\(\s*(const)*\s*\w*\**\s*(?<funArg>\w*)\)','names');
+                headerRteData(1).funProto = regexp(data,'(?<funProto>Std_ReturnType\s*\w*\s*\(\s*(const)*\s*(,*\s*\w+\**\s*\w*){1,}\))','names');
+                headerRteData(1).argNames = regexp(data,'Std_ReturnType\s*(?<oldFun>\w*)\s*\(\s*(const)*\s*(?<funArg>(,*\s*\w+\**\s*\w*){1,})\)','names');
 
                 headerRteData(1).callExp = regexp(data,'#define\s*(?<oldFun>\w+)\s+(?<xpFun>\w+)','names');
 
@@ -651,16 +703,16 @@ classdef codeIntegration < handle
                 %? Updating rteData for rte call generation
                 mdlData = napp.allMdlData(cmpName);
                 for rnblNo = 1 : length(mdlData.rnblData)
-                    rteGenerationData = struct('signalName',{},'portType',{},'funProto',{},'argName',{},'dataType',{},'varName',{},'defValue',{},'portName',{},'dataElement',{},'isBus',{},'isVoid',{});
+                    rteGenerationData = struct('signalName',{},'portType',{},'funProto',{},'argName',{},'dataType',{},'varName',{},'defValue',{},'portName',{},'dataElement',{},'retError',{},'isBus',{},'isVoid',{},'dataTypeMisMatch',{});
 
                     for inpNo = 1 : length(mdlData.rnblData(rnblNo).inportData)
                         waitbar(((cmpNo-1)/length(napp.allASWCmp)) + ((0.25 * inpNo/length(mdlData.rnblData(rnblNo).inportData)) * (rnblNo/length(mdlData.rnblData)) * (1/length(napp.allASWCmp))),...
                                 napp.progBar,{'Collecting RTE data(3/5)',sprintf('Collecting receiver RTE calls of ''%s'' runnable...',regexprep(mdlData.rnblData(rnblNo).rnblName,'_','\\_'))});
 
-                        funNameIdx = find(contains({headerRteData.callExp.oldFun},mdlData.rnblData(rnblNo).inportData(inpNo).portName));
+                        funNameIdx = find(contains({headerRteData.callExp.oldFun},mdlData.rnblData(rnblNo).inportData(inpNo).signalName));
                         rteNo = length(rteGenerationData) + 1;
                         
-                        rteGenerationData(rteNo).signalName = mdlData.rnblData(rnblNo).inportData(inpNo).portName;
+                        rteGenerationData(rteNo).signalName = mdlData.rnblData(rnblNo).inportData(inpNo).signalName;
                         rteGenerationData(rteNo).portType = 'inPort';
 
                         if ~isempty(funNameIdx)
@@ -675,7 +727,8 @@ classdef codeIntegration < handle
                             if ~isempty(funProtoIdx)
                                 rteGenerationData(rteNo).funProto = strrep(headerRteData.funProto(funProtoIdx(1)).funProto, headerRteData.callExp(funNameIdx(funNo)).oldFun, headerRteData.callExp(funNameIdx(funNo)).xpFun);
                                 funProtoIdx = find(contains({headerRteData.argNames.oldFun},headerRteData.callExp(funNameIdx(funNo)).oldFun));
-                                rteGenerationData(rteNo).argName = headerRteData.argNames(funProtoIdx(1)).funArg;
+                                [rteGenerationData(rteNo).argName, rteGenerationData(rteNo).dataType, rteGenerationData(rteNo).dataTypeMisMatch] = napp.getFunArg(headerRteData.argNames(funProtoIdx(1)).funArg, mdlData.rnblData(rnblNo).inportData(inpNo).baseDataType);
+                                % rteGenerationData(rteNo).argName = headerRteData.argNames(funProtoIdx(1)).funArg;
                                 rteGenerationData(rteNo).isVoid = 0;
                             else
                                 %* Getting void function prototype
@@ -684,16 +737,19 @@ classdef codeIntegration < handle
 
                                 rteGenerationData(rteNo).isVoid = 1;
                             end
-                            rteGenerationData(rteNo).dataType = mdlData.rnblData(rnblNo).inportData(inpNo).baseDataType;
+                            % rteGenerationData(rteNo).dataType = mdlData.rnblData(rnblNo).inportData(inpNo).baseDataType;
                             rteGenerationData(rteNo).isBus = mdlData.rnblData(rnblNo).inportData(inpNo).isBus;
+
+                            rteGenerationData(rteNo).portName = mdlData.rnblData(rnblNo).inportData(inpNo).portName;
+                            rteGenerationData(rteNo).dataElement = mdlData.rnblData(rnblNo).inportData(inpNo).dataElementName;
 
                             portSplit = strsplit(rteGenerationData(rteNo).signalName,'_');
                             portSplit = portSplit(2 : length(portSplit));
                             rteGenerationData(rteNo).varName = strjoin(portSplit,'_');
                             
-                            portSplit = regexp(rteGenerationData(rteNo).signalName,'(?<portName>\w+_(P|R))_(?<dataElem>\w+)','names');
-                            rteGenerationData(rteNo).portName = portSplit.portName;
-                            rteGenerationData(rteNo).dataElement = portSplit.dataElem;
+                            % portSplit = regexp(rteGenerationData(rteNo).signalName,'(?<portName>\w+_(P|R))_(?<dataElem>\w+)','names');
+                            % rteGenerationData(rteNo).portName = portSplit.portName;
+                            % rteGenerationData(rteNo).dataElement = portSplit.dataElem;
 
                             portDefValues = napp.getDefValues(napp.defValueMap, rteGenerationData(rteNo).portName);
                             if ~isempty(portDefValues)
@@ -703,6 +759,13 @@ classdef codeIntegration < handle
                                 % disp(rteGenerationData(rteNo).portName)
                                 rteGenerationData(rteNo).defValue = 0;
                             end
+                        else
+                            %! Sneak peak code
+                            misLen = length(napp.missingPorts) + 1;
+                            napp.missingPorts(misLen).rnblName = mdlData.rnblData(rnblNo).rnblName;
+                            napp.missingPorts(misLen).signalName = mdlData.rnblData(rnblNo).inportData(inpNo).signalName;
+                            napp.missingPorts(misLen).portType = 'inPort';
+                            disp(mdlData.rnblData(rnblNo).inportData(inpNo).signalName)
                         end
                     end
 
@@ -710,10 +773,10 @@ classdef codeIntegration < handle
                         waitbar(((cmpNo-1)/length(napp.allASWCmp)) + ((0.5 * outNo/length(mdlData.rnblData(rnblNo).outportData)) * (rnblNo/length(mdlData.rnblData)) * (1/length(napp.allASWCmp))),...
                                 napp.progBar,{'Collecting RTE data(3/5)',sprintf('Collecting sender RTE calls of ''%s'' runnable...',regexprep(mdlData.rnblData(rnblNo).rnblName,'_','\\_'))});
 
-                        funNameIdx = find(contains({headerRteData.callExp.oldFun},mdlData.rnblData(rnblNo).outportData(outNo).portName));
+                        funNameIdx = find(contains({headerRteData.callExp.oldFun},mdlData.rnblData(rnblNo).outportData(outNo).signalName));
                         rteNo = length(rteGenerationData) + 1;
                         
-                        rteGenerationData(rteNo).signalName = mdlData.rnblData(rnblNo).outportData(outNo).portName;
+                        rteGenerationData(rteNo).signalName = mdlData.rnblData(rnblNo).outportData(outNo).signalName;
                         rteGenerationData(rteNo).portType = 'outPort';
 
                         if ~isempty(funNameIdx)
@@ -728,7 +791,8 @@ classdef codeIntegration < handle
                             if ~isempty(funProtoIdx)
                                 rteGenerationData(rteNo).funProto = strrep(headerRteData.funProto(funProtoIdx(1)).funProto, headerRteData.callExp(funNameIdx(funNo)).oldFun, headerRteData.callExp(funNameIdx(funNo)).xpFun);
                                 funProtoIdx = find(contains({headerRteData.argNames.oldFun},headerRteData.callExp(funNameIdx(funNo)).oldFun));
-                                rteGenerationData(rteNo).argName = headerRteData.argNames(funProtoIdx(1)).funArg;
+                                [rteGenerationData(rteNo).argName, rteGenerationData(rteNo).dataType, rteGenerationData(rteNo).dataTypeMisMatch] = napp.getFunArg(headerRteData.argNames(funProtoIdx(1)).funArg, mdlData.rnblData(rnblNo).outportData(outNo).baseDataType);
+                                % rteGenerationData(rteNo).argName = headerRteData.argNames(funProtoIdx(1)).funArg;
                                 rteGenerationData(rteNo).isVoid = 0;
                             else
                                 %* Getting void function prototype
@@ -737,17 +801,19 @@ classdef codeIntegration < handle
 
                                 rteGenerationData(rteNo).isVoid = 1;
                             end
-                            rteGenerationData(rteNo).dataType = mdlData.rnblData(rnblNo).outportData(outNo).baseDataType;
+                            % rteGenerationData(rteNo).dataType = mdlData.rnblData(rnblNo).outportData(outNo).baseDataType;
                             rteGenerationData(rteNo).isBus = mdlData.rnblData(rnblNo).outportData(outNo).isBus;
 
+                            rteGenerationData(rteNo).portName = mdlData.rnblData(rnblNo).outportData(outNo).portName;
+                            rteGenerationData(rteNo).dataElement = mdlData.rnblData(rnblNo).outportData(outNo).dataElementName;
                             
                             portSplit = strsplit(rteGenerationData(rteNo).signalName,'_');
                             portSplit = portSplit(2 : length(portSplit));
                             rteGenerationData(rteNo).varName = strjoin(portSplit,'_');
                             
-                            portSplit = regexp(rteGenerationData(rteNo).signalName,'(?<portName>\w+_(P|R))_(?<dataElem>\w+)','names');
-                            rteGenerationData(rteNo).portName = portSplit.portName;
-                            rteGenerationData(rteNo).dataElement = portSplit.dataElem;
+                            % portSplit = regexp(rteGenerationData(rteNo).signalName,'(?<portName>\w+_(P|R))_(?<dataElem>\w+)','names');
+                            % rteGenerationData(rteNo).portName = portSplit.portName;
+                            % rteGenerationData(rteNo).dataElement = portSplit.dataElem;
 
                             portDefValues = napp.getDefValues(napp.defValueMap, rteGenerationData(rteNo).portName);
                             if ~isempty(portDefValues)
@@ -757,6 +823,13 @@ classdef codeIntegration < handle
                                 % disp(rteGenerationData(rteNo).portName)
                                 rteGenerationData(rteNo).defValue = 0;
                             end
+                        else
+                            %! Sneak peak code
+                            misLen = length(napp.missingPorts) + 1;
+                            napp.missingPorts(misLen).rnblName = mdlData.rnblData(rnblNo).rnblName;
+                            napp.missingPorts(misLen).signalName = mdlData.rnblData(rnblNo).outportData(outNo).signalName;
+                            napp.missingPorts(misLen).portType = 'outPort';
+                            disp(mdlData.rnblData(rnblNo).outportData(outNo).portName)
                         end
                     end
 
@@ -794,14 +867,32 @@ classdef codeIntegration < handle
                         end
                     end
 
+                    %! Add client - server functions
+                    for funcNo = 1 : length(mdlData.funcData)
+                        waitbar(((cmpNo-1)/length(napp.allASWCmp)) + ((funcNo/length(mdlData.funcData)) * (rnblNo/length(mdlData.rnblData)) * (1/length(napp.allASWCmp))),...
+                                napp.progBar,{'Collecting RTE data(3/5)',sprintf('Collecting client - server RTE calls of ''%s'' runnable...',regexprep(mdlData.rnblData(rnblNo).rnblName,'_','\\_'))});
+                        
+                        % Checking if function caller is used i.e connected to something
+                        if (isempty(mdlData.funcData(funcNo).dstBlocks) || isequal(mdlData.funcData(funcNo).dstBlocks, repmat({'Terminator'},size(mdlData.funcData(funcNo).dstBlocks)))) &&...
+                            (isempty(mdlData.funcData(funcNo).srcBlocks) || isequal(mdlData.funcData(funcNo).srcBlocks, repmat({'Ground'},size(mdlData.funcData(funcNo).srcBlocks))))
+                            
+                            funNameIdx = find(contains({headerRteData.callExp.oldFun}, mdlData.funcData(funcNo).funcName));
+                            rteNo = length(rteGenerationData) + 1;
+
+                            %* Getting function proto based on <oldFun> in callExp 
+                            funProtoIdx = find(contains({headerRteData.funProto.funProto},headerRteData.callExp(funNameIdx(funNo)).oldFun));
+
+                        end
+                    end
+
                     %? sorting structure
                     [~,sortedIdx] = sort({rteGenerationData.portType});
                     napp.rnblRteData(mdlData.rnblData(rnblNo).rnblName) = rteGenerationData(sortedIdx);
                 end
             end
 
-            %! Saving autosar data in matFile
-            tmpMat(napp, 1);
+            %! Saving rte data in matFile
+            tmpMat(napp, 3);
         end
 
         function createLCTBlocks(napp)
@@ -952,7 +1043,7 @@ classdef codeIntegration < handle
                     end
 
                     %Adding legacy code block
-
+                    % limits of simulink canvas : -32768 to 32767
 
                 end
             end
@@ -962,6 +1053,25 @@ classdef codeIntegration < handle
             cd(napp.integPath);
             
             if writeData == 1
+                arxmlData.allASWCmp = napp.allASWCmp;
+                arxmlData.delConMap = napp.delConMap;
+                arxmlData.asmConn = napp.asmConn;
+                arxmlData.dataTypeMap = napp.dataTypeMap;
+                arxmlData.idtrStructMap = napp.idtrStructMap;
+                arxmlData.defValueMap = napp.defValueMap;
+                arxmlData.glbConfigMap = napp.glbConfigMap;
+                save('RootSWComposition_IntegrationData.mat','arxmlData');
+            elseif writeData == 2
+                arxmlData.allASWCmp = napp.allASWCmp;
+                arxmlData.delConMap = napp.delConMap;
+                arxmlData.asmConn = napp.asmConn;
+                arxmlData.dataTypeMap = napp.dataTypeMap;
+                arxmlData.idtrStructMap = napp.idtrStructMap;
+                arxmlData.defValueMap = napp.defValueMap;
+                arxmlData.glbConfigMap = napp.glbConfigMap;
+                modelData.allMdlData = napp.allMdlData;
+                save('RootSWComposition_IntegrationData.mat','arxmlData','modelData');
+            elseif writeData == 3
                 arxmlData.allASWCmp = napp.allASWCmp;
                 arxmlData.delConMap = napp.delConMap;
                 arxmlData.asmConn = napp.asmConn;
@@ -1004,19 +1114,63 @@ classdef codeIntegration < handle
             end
         end
 
-        function portData = getPortData(portData, portNo, portHandle, dataTypeMap)
-            portData(portNo).portName = get_param(portHandle,'Name');
-            portData(portNo).isBus = 0;
-            outDataType = get_param(portHandle,'OutDataTypeStr');
-            if isequal(outDataType(1 : 4),'Enum')
-                portData(portNo).appDataType =  outDataType(7 : length(outDataType));
-            elseif isequal(outDataType(1 : 3),'Bus')
-                portData(portNo).appDataType =  outDataType(6 : length(outDataType));
-                portData(portNo).isBus = 1;
+        function portData = getPortData(portData, portNo, portHandle, autosarMap, dataTypeMap, simDataTypes)
+            % portData(portNo).portName = get_param(portHandle,'Name');
+            if isequal(get_param(portHandle,'BlockType'),'Inport')
+                [arPortName, arDataElementName, arDataAccessMode] = getInport(autosarMap, get_param(portHandle,'Name'));
             else
-                portData(portNo).appDataType =  outDataType;
+                [arPortName, arDataElementName, arDataAccessMode] = getOutport(autosarMap, get_param(portHandle,'Name'));
             end
-            portData(portNo).baseDataType = dataTypeMap(portData(portNo).appDataType);
+
+            portIdx = 0;
+            if isequal(arDataAccessMode,'ErrorStatus')
+                portIdx = find(contains({portData.signalName}, [arPortName '_' arDataElementName]));
+                if ~isempty(portIdx)
+                    portData(portIdx(1)).retError = 1;
+                else
+                    portData(portNo).retError = 1;
+                    portIdx = 0;
+                end
+            end
+
+            if portIdx == 0
+                portData(portNo).portName = arPortName;
+                portData(portNo).dataElementName = arDataElementName;
+                portData(portNo).signalName = [arPortName '_' arDataElementName];
+                portData(portNo).isBus = 0;
+                outDataType = get_param(portHandle,'OutDataTypeStr');
+                if isempty(find(contains(simDataTypes, outDataType)))
+                    if isequal(outDataType(1 : 4),'Enum')
+                        portData(portNo).appDataType =  outDataType(7 : length(outDataType));
+                    elseif isequal(outDataType(1 : 3),'Bus')
+                        portData(portNo).appDataType =  outDataType(6 : length(outDataType));
+                        portData(portNo).isBus = 1;
+                    else
+                        portData(portNo).appDataType =  outDataType;
+                    end
+                    portData(portNo).baseDataType = dataTypeMap(portData(portNo).appDataType);
+                else
+                    portData(portNo).baseDataType = outDataType;
+                end
+            end
+        end
+
+        function [args, dataType, dtMisMatch] = getFunArg(funArgs, mdlDataType, varargin)
+            if ~isempty(varargin)
+                indArgs = strsplit(funArgs,',');
+                for argNo = 1 : length(indArgs)
+                    argTypes = regexp(rteGenerationData(rteNo).signalName,'\s*(const)*\s*(?<dataType>\w*)\**\s*(?<argName>\w*)','names');
+                    args{argNo} = argTypes(1).argName;
+                    argIdx = find(contains(varargin,args{argNo}));
+                    dataType{argNo} = argTypes(1).dataType;
+                    dtMisMatch{argNo} = ~isequal(dataType, mdlDataType{argIdx});
+                end
+            else
+                argTypes = regexp(funArgs,'\s*(const)*\s*(?<dataType>\w*)\**\s*(?<argName>\w*)','names');
+                args{1} = argTypes(1).argName;
+                dataType{1} = argTypes(1).dataType;
+                dtMisMatch{1} = ~isequal(dataType, mdlDataType);
+            end
         end
 
         function [portData, lctPortMap] = lctPortData(portData, portNo, lctPortMap, rteData)
