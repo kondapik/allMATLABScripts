@@ -343,7 +343,13 @@ classdef OBCDCDCTesting < matlab.apps.AppBase
                     
                     errorCode = 3; %Error in updating Init function call generator 
                     if app.AUTOSAR_stat == 1
-                        set_param(sprintf('%s/InitFunCallGen',app.harness_name_MIL),'sample_time',num2str(sum([app.test_data.TestTime])+1));
+                        if ~isequal(exist(app.harness_name_MIL), 0)
+                            set_param(sprintf('%s/InitFunCallGen',app.harness_name_MIL),'sample_time',num2str(sum([app.test_data.TestTime])+1));
+                        end
+
+                        if ~isequal(exist(app.harness_name_SIL), 0)
+                            set_param(sprintf('%s/InitFunCallGen',app.harness_name_SIL),'sample_time',num2str(sum([app.test_data.TestTime])+1));
+                        end
                     end
                     
                     Ex_Workbook.Close;
