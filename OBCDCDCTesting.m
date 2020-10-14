@@ -429,20 +429,22 @@ classdef OBCDCDCTesting < matlab.apps.AppBase
                     elseif isequal(availHarness, 'MIL')
                         loadModel(app,app.harness_name_MIL);
                         sigBuilders_MIL = find_system(app.harness_name_MIL,'MaskType','Sigbuilder block');
+                        sigBuilders_SIL = '';
                     elseif isequal(availHarness, 'SIL')
                         loadModel(app,app.harness_name_SIL);
                         sigBuilders_SIL = find_system(app.harness_name_SIL,'MaskType','Sigbuilder block');
+                        sigBuilders_MIL = '';
                     end
 
                     %deleting signals (all but first)
-                    if ~isequal(exist(sigBuilders_MIL),0)
+                    if ~isempty(sigBuilders_MIL)
                         [~, ~, signames_t, groupnames_t] = signalbuilder(sigBuilders_MIL{1,1});
                         for grp_no = 2 : length(groupnames_t)
                             signalbuilder(sigBuilders_MIL{1,1}, 'set', [1:length(signames_t)], 1, [], []);
                         end
                     end
 
-                    if ~isequal(exist(sigBuilders_SIL),0)
+                    if ~isempty(sigBuilders_SIL)
                         [~, ~, signames_t, groupnames_t] = signalbuilder(sigBuilders_SIL{1,1});
                         for grp_no = 2 : length(groupnames_t)
                             signalbuilder(sigBuilders_SIL{1,1}, 'set', [1:length(signames_t)], 1, [], []);
@@ -484,30 +486,30 @@ classdef OBCDCDCTesting < matlab.apps.AppBase
                             time_array = reshape(time_array,sig_no,1);
                         end
 
-                        if ~isequal(exist(sigBuilders_MIL),0)
+                        if ~isempty(sigBuilders_MIL)
                             signalbuilder(sigBuilders_MIL{1,1},'appendgroup',time_array,signal_data,signal_name,app.test_data(caseNo).TestCaseID);
                         end
 
-                        if ~isequal(exist(sigBuilders_SIL),0)
+                        if ~isempty(sigBuilders_SIL)
                         signalbuilder(sigBuilders_SIL{1,1},'appendgroup',time_array,signal_data,signal_name,app.test_data(caseNo).TestCaseID);
                         end
                         
                         if caseNo == 1
                             %deleting the first one
-                            if ~isequal(exist(sigBuilders_MIL),0)
+                            if ~isempty(sigBuilders_MIL)
                                 signalbuilder(sigBuilders_MIL{1,1}, 'set', [1:length(signames_t)], 1, [], []);
                             end
-                            if ~isequal(exist(sigBuilders_SIL),0)
+                            if ~isempty(sigBuilders_SIL)
                                 signalbuilder(sigBuilders_SIL{1,1}, 'set', [1:length(signames_t)], 1, [], []);
                             end
                         end 
                     end
                     
-                    if ~isequal(exist(sigBuilders_MIL),0)
+                    if ~isempty(sigBuilders_MIL)
                         save_system(app.harness_name_MIL);
                     end
                     
-                    if ~isequal(exist(sigBuilders_SIL),0)
+                    if ~isempty(sigBuilders_SIL)
                         save_system(app.harness_name_SIL);
                     end
 
