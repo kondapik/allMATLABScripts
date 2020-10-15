@@ -186,6 +186,7 @@ classdef codeIntegration < handle
                     if isempty(findPrv)
                         napp.asmConn(length(napp.asmConn) + 1).prvCmp = 'viaBSW';
                         connIdx = length(napp.asmConn); 
+                        napp.asmConn(length(napp.asmConn)).prvPort = '';
                     else
                         provPort = provIntf.item(0).getElementsByTagName('TARGET-P-PORT-REF');
                         provPort = strsplit(char(provPort.item(0).getFirstChild.getData),'/');
@@ -201,6 +202,7 @@ classdef codeIntegration < handle
                     
                     if isempty(findRqs)
                         napp.asmConn(connIdx).rcvCmp = 'viaBSW';
+                        napp.asmConn(connIdx).rcvPort = '';
                     else
                         rcvPort = rqsIntf.item(0).getElementsByTagName('TARGET-R-PORT-REF');
                         rcvPort = strsplit(char(rcvPort.item(0).getFirstChild.getData),'/');
@@ -499,7 +501,7 @@ classdef codeIntegration < handle
                 end
                 mdlData(1).rnblData = rnblData;
 
-                funcData = struct('functionProto',{},'funcName',{},'inArg',{},'outArg',{},'inArgSpc',{},'inBase',{},'outArgSpc',{},'outBase',{},'dstBlocks',{},'srcBlocks',{});
+                funcData = struct('functionProto',{},'funcName',{},'portName',{},'oprName',{},'inArg',{},'outArg',{},'inArgSpc',{},'inBase',{},'outArgSpc',{},'outBase',{},'dstBlocks',{},'srcBlocks',{});
 
 
                 %? Collecting function data
@@ -522,7 +524,7 @@ classdef codeIntegration < handle
                     %* Collecting output arguments
                     outArg = regexp(funcData(calNo).functionProto,'\[*(?<ouArg>,*\w*)*\]*(?=( = ))','names');
                     outArg = outArg{1};
-                    
+
                     if ~isempty(outArg)
                         outputArg = outArg.ouArg;
                         funcData(calNo).outArg = strsplit(outputArg,',');
@@ -552,7 +554,8 @@ classdef codeIntegration < handle
                     funcName = regexp(funcData(calNo).functionProto,'( = )*(?<funName>\w*(?=\())','names');
                     funcName = funcName{1};
                     funcData(calNo).funcName = funcName.funName;
-                    
+                    [funcData(calNo).portName,funcData(calNo).oprName] = getFunctionCaller(autosarMap, funcData(calNo).funcName);
+
                     %* Collecting input arguments
                     inpArg = regexp(funcData(calNo).functionProto,'\((?<inArg>,*\w*)*\)','names');
                     inpArg = inpArg{1};
@@ -714,6 +717,7 @@ classdef codeIntegration < handle
                         
                         rteGenerationData(rteNo).signalName = mdlData.rnblData(rnblNo).inportData(inpNo).signalName;
                         rteGenerationData(rteNo).portType = 'inPort';
+                        rteGenerationData(rteNo).retError = mdlData.rnblData(rnblNo).inportData(inpNo).retError;
 
                         if ~isempty(funNameIdx)
                             %* Checking if rte function is generated (not generated if port is not connected)
@@ -778,6 +782,7 @@ classdef codeIntegration < handle
                         
                         rteGenerationData(rteNo).signalName = mdlData.rnblData(rnblNo).outportData(outNo).signalName;
                         rteGenerationData(rteNo).portType = 'outPort';
+                        rteGenerationData(rteNo).retError = mdlData.rnblData(rnblNo).outportData(outNo).retError;
 
                         if ~isempty(funNameIdx)
                             %* Checking if rte function is generated (not generated if port is not connected)
@@ -873,21 +878,80 @@ classdef codeIntegration < handle
                                 napp.progBar,{'Collecting RTE data(3/5)',sprintf('Collecting client - server RTE calls of ''%s'' runnable...',regexprep(mdlData.rnblData(rnblNo).rnblName,'_','\\_'))});
                         
                         % Checking if function caller is used i.e connected to something
-                        if (isempty(mdlData.funcData(funcNo).dstBlocks) || isequal(mdlData.funcData(funcNo).dstBlocks, repmat({'Terminator'},size(mdlData.funcData(funcNo).dstBlocks)))) &&...
-                            (isempty(mdlData.funcData(funcNo).srcBlocks) || isequal(mdlData.funcData(funcNo).srcBlocks, repmat({'Ground'},size(mdlData.funcData(funcNo).srcBlocks))))
+                        if ~((isempty(mdlData.funcData(funcNo).dstBlocks) || isequal(mdlData.funcData(funcNo).dstBlocks, repmat({'Terminator'},size(mdlData.funcData(funcNo).dstBlocks)))) && ...
+                            (isempty(mdlData.funcData(funcNo).srcBlocks) || isequal(mdlData.funcData(funcNo).srcBlocks, repmat({'Ground'},size(mdlData.funcData(funcNo).srcBlocks)))))
                             
                             funNameIdx = find(contains({headerRteData.callExp.oldFun}, mdlData.funcData(funcNo).funcName));
                             rteNo = length(rteGenerationData) + 1;
 
                             %* Getting function proto based on <oldFun> in callExp 
-                            funProtoIdx = find(contains({headerRteData.funProto.funProto},headerRteData.callExp(funNameIdx(funNo)).oldFun));
+                            funProtoIdx = find(contains({headerRteData.funProto.funProto},headerRteData.callExp(funNameIdx(1)).oldFun));
+                            rteGenerationData(rteNo).funProto = strrep(headerRteData.funProto(funProtoIdx(1)).funProto, headerRteData.callExp(funNameIdx(1)).oldFun, headerRteData.callExp(funNameIdx(1)).xpFun);
+                            
+                            %TODO client server interfaces are not void functions and doest return a structure (at least for the moment)
+                            rteGenerationData(rteNo).isVoid = 0;
+                            rteGenerationData(rteNo).isBus = 0;
 
+                            splitName = strsplit(mdlData.funcData(funcNo).funcName,'_');
+                            smlFunName = strjoin(splitName(2 : length(splitName)),'_');
+                            funArgNo = 0;
+                            for funInpNo = 1 : length(mdlData.funcData(funcNo).inArg)
+                                if ~isequal(mdlData.funcData(funcNo).srcBlocks{funInpNo},'Ground')
+                                    funArgNo = funArgNo + 1;
+                                    rteGenerationData(rteNo).signalName{funArgNo} = [mdlData.funcData(funcNo).funcName '_' mdlData.funcData(funcNo).inArg{funInpNo}];
+                                    rteGenerationData(rteNo).portType{funArgNo} = 'inPort';
+                                    [rteGenerationData(rteNo).argName{funArgNo}, rteGenerationData(rteNo).dataType{funArgNo}, rteGenerationData(rteNo).dataTypeMisMatch{funArgNo}] = ...
+                                    napp.getFunArg(headerRteData.argNames(funProtoIdx(1)).funArg, mdlData.funcData(funcNo).inBase{funInpNo}, mdlData.funcData(funcNo).inArg{funInpNo});
+
+                                    rteGenerationData(rteNo).portName{funArgNo} = mdlData.funcData(funcNo).portName;
+                                    rteGenerationData(rteNo).dataElement{funArgNo} = [mdlData.funcData(funcNo).oprName '_' mdlData.funcData(funcNo).inArg{funInpNo}];
+                                    rteGenerationData(rteNo).varName{funArgNo} = [smlFunName '_' mdlData.funcData(funcNo).inArg{funInpNo}];
+
+                                    rteGenerationData(rteNo).defValue{funArgNo} = 0; %default value not found in arxml
+
+                                    % portDefValues = napp.getDefValues(napp.defValueMap, rteGenerationData(rteNo).portName);
+                                    % if ~isempty(portDefValues)
+                                    %     elemIdx = find(contains({portDefValues.elemName},rteGenerationData(rteNo).dataElement));
+                                    %     rteGenerationData(rteNo).defValue{funArgNo} = portDefValues(elemIdx).defValue;
+                                    % else
+                                    %     % disp(rteGenerationData(rteNo).portName)
+                                    %     rteGenerationData(rteNo).defValue{funArgNo} = 0;
+                                    % end
+                                end
+                            end
+
+                            for funOutNo = 1 : length(mdlData.funcData(funcNo).outArg)
+                                if ~isequal(mdlData.funcData(funcNo).dstBlocks{funOutNo},'Terminator')
+                                    funArgNo = funArgNo + 1;
+                                    rteGenerationData(rteNo).signalName{funArgNo} = [mdlData.funcData(funcNo).funcName '_' mdlData.funcData(funcNo).outArg{funOutNo}];
+                                    rteGenerationData(rteNo).portType{funArgNo} = 'outPort';
+                                    [rteGenerationData(rteNo).argName{funArgNo}, rteGenerationData(rteNo).dataType{funArgNo}, rteGenerationData(rteNo).dataTypeMisMatch{funArgNo}] = ...
+                                    napp.getFunArg(headerRteData.argNames(funProtoIdx(1)).funArg, mdlData.funcData(funcNo).outBase{funOutNo}, mdlData.funcData(funcNo).outArg{funOutNo});
+
+                                    rteGenerationData(rteNo).portName{funArgNo} = mdlData.funcData(funcNo).portName;
+                                    rteGenerationData(rteNo).dataElement{funArgNo} = [mdlData.funcData(funcNo).oprName '_' mdlData.funcData(funcNo).outArg{funOutNo}];
+                                    rteGenerationData(rteNo).varName{funArgNo} = [smlFunName '_' mdlData.funcData(funcNo).outArg{funOutNo}];
+
+                                    rteGenerationData(rteNo).defValue{funArgNo} = 0; %default value not found in arxml
+                                   
+                                    % portDefValues = napp.getDefValues(napp.defValueMap, rteGenerationData(rteNo).portName);
+                                    % if ~isempty(portDefValues)
+                                    %     elemIdx = find(contains({portDefValues.elemName},rteGenerationData(rteNo).dataElement));
+                                    %     rteGenerationData(rteNo).defValue{funArgNo} = portDefValues(elemIdx).defValue;
+                                    % else
+                                    %     % disp(rteGenerationData(rteNo).portName)
+                                    %     rteGenerationData(rteNo).defValue{funArgNo} = 0;
+                                    % end
+                                end
+                            end
+                            % [rteGenerationData(rteNo).argName, rteGenerationData(rteNo).dataType, rteGenerationData(rteNo).dataTypeMisMatch] = napp.getFunArg(headerRteData.argNames(funProtoIdx(1)).funArg, mdlData.rnblData(rnblNo).inportData(inpNo).baseDataType);
                         end
                     end
 
-                    %? sorting structure
-                    [~,sortedIdx] = sort({rteGenerationData.portType});
-                    napp.rnblRteData(mdlData.rnblData(rnblNo).rnblName) = rteGenerationData(sortedIdx);
+                    % %? sorting structure
+                    % [~,sortedIdx] = sort({rteGenerationData.portType});
+                    % napp.rnblRteData(mdlData.rnblData(rnblNo).rnblName) = rteGenerationData(sortedIdx);
+                    napp.rnblRteData(mdlData.rnblData(rnblNo).rnblName) = rteGenerationData;
                 end
             end
 
@@ -1159,18 +1223,20 @@ classdef codeIntegration < handle
             if ~isempty(varargin)
                 indArgs = strsplit(funArgs,',');
                 for argNo = 1 : length(indArgs)
-                    argTypes = regexp(rteGenerationData(rteNo).signalName,'\s*(const)*\s*(?<dataType>\w*)\**\s*(?<argName>\w*)','names');
+                    argTypes = regexp(indArgs{argNo},'\s*(const)*\s*(?<dataType>\w*)\**\s*(?<argName>\w*)','names');
                     args{argNo} = argTypes(1).argName;
-                    argIdx = find(contains(varargin,args{argNo}));
                     dataType{argNo} = argTypes(1).dataType;
-                    dtMisMatch{argNo} = ~isequal(dataType, mdlDataType{argIdx});
                 end
+                % varargin -> argument in function caller
+                argIdx = find(contains(args, varargin));
+                args = args{argIdx(1)};
+                dataType = dataType{argIdx(1)};
             else
                 argTypes = regexp(funArgs,'\s*(const)*\s*(?<dataType>\w*)\**\s*(?<argName>\w*)','names');
-                args{1} = argTypes(1).argName;
-                dataType{1} = argTypes(1).dataType;
-                dtMisMatch{1} = ~isequal(dataType, mdlDataType);
+                args = argTypes(1).argName;
+                dataType = argTypes(1).dataType;
             end
+            dtMisMatch = ~isequal(dataType, mdlDataType);
         end
 
         function [portData, lctPortMap] = lctPortData(portData, portNo, lctPortMap, rteData)
