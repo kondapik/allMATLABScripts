@@ -711,15 +711,16 @@ classdef codeIntegration < handle
                     for inpNo = 1 : length(mdlData.rnblData(rnblNo).inportData)
                         waitbar(((cmpNo-1)/length(napp.allASWCmp)) + ((0.25 * inpNo/length(mdlData.rnblData(rnblNo).inportData)) * (rnblNo/length(mdlData.rnblData)) * (1/length(napp.allASWCmp))),...
                                 napp.progBar,{'Collecting RTE data(3/5)',sprintf('Collecting receiver RTE calls of ''%s'' runnable...',regexprep(mdlData.rnblData(rnblNo).rnblName,'_','\\_'))});
-
-                        funNameIdx = find(contains({headerRteData.callExp.oldFun},mdlData.rnblData(rnblNo).inportData(inpNo).signalName));
-                        rteNo = length(rteGenerationData) + 1;
                         
-                        rteGenerationData(rteNo).signalName = mdlData.rnblData(rnblNo).inportData(inpNo).signalName;
-                        rteGenerationData(rteNo).portType = 'inPort';
-                        rteGenerationData(rteNo).retError = mdlData.rnblData(rnblNo).inportData(inpNo).retError;
+                        funNameIdx = find(contains({headerRteData.callExp.oldFun},mdlData.rnblData(rnblNo).inportData(inpNo).signalName));
 
                         if ~isempty(funNameIdx)
+                            rteNo = length(rteGenerationData) + 1;
+                            
+                            rteGenerationData(rteNo).signalName = mdlData.rnblData(rnblNo).inportData(inpNo).signalName;
+                            rteGenerationData(rteNo).portType = 'inPort';
+                            rteGenerationData(rteNo).retError = mdlData.rnblData(rnblNo).inportData(inpNo).retError;
+
                             %* Checking if rte function is generated (not generated if port is not connected)
                             funNo = 1;
                             while contains(headerRteData.callExp(funNameIdx(funNo)).oldFun,'Rte_Invalidate')
@@ -763,13 +764,13 @@ classdef codeIntegration < handle
                                 % disp(rteGenerationData(rteNo).portName)
                                 rteGenerationData(rteNo).defValue = 0;
                             end
-                        else
-                            %! Sneak peak code
-                            misLen = length(napp.missingPorts) + 1;
-                            napp.missingPorts(misLen).rnblName = mdlData.rnblData(rnblNo).rnblName;
-                            napp.missingPorts(misLen).signalName = mdlData.rnblData(rnblNo).inportData(inpNo).signalName;
-                            napp.missingPorts(misLen).portType = 'inPort';
-                            disp(mdlData.rnblData(rnblNo).inportData(inpNo).signalName)
+                        % else
+                        %     %! Sneak peak code
+                        %     misLen = length(napp.missingPorts) + 1;
+                        %     napp.missingPorts(misLen).rnblName = mdlData.rnblData(rnblNo).rnblName;
+                        %     napp.missingPorts(misLen).signalName = mdlData.rnblData(rnblNo).inportData(inpNo).signalName;
+                        %     napp.missingPorts(misLen).portType = 'inPort';
+                        %     disp(mdlData.rnblData(rnblNo).inportData(inpNo).signalName)
                         end
                     end
 
@@ -778,13 +779,14 @@ classdef codeIntegration < handle
                                 napp.progBar,{'Collecting RTE data(3/5)',sprintf('Collecting sender RTE calls of ''%s'' runnable...',regexprep(mdlData.rnblData(rnblNo).rnblName,'_','\\_'))});
 
                         funNameIdx = find(contains({headerRteData.callExp.oldFun},mdlData.rnblData(rnblNo).outportData(outNo).signalName));
-                        rteNo = length(rteGenerationData) + 1;
-                        
-                        rteGenerationData(rteNo).signalName = mdlData.rnblData(rnblNo).outportData(outNo).signalName;
-                        rteGenerationData(rteNo).portType = 'outPort';
-                        rteGenerationData(rteNo).retError = mdlData.rnblData(rnblNo).outportData(outNo).retError;
 
                         if ~isempty(funNameIdx)
+                            rteNo = length(rteGenerationData) + 1;
+                            
+                            rteGenerationData(rteNo).signalName = mdlData.rnblData(rnblNo).outportData(outNo).signalName;
+                            rteGenerationData(rteNo).portType = 'outPort';
+                            rteGenerationData(rteNo).retError = mdlData.rnblData(rnblNo).outportData(outNo).retError;
+
                             %* Checking if rte function is generated (not generated if port is not connected)
                             funNo = 1;
                             while contains(headerRteData.callExp(funNameIdx(funNo)).oldFun,'Rte_Invalidate')
@@ -828,13 +830,13 @@ classdef codeIntegration < handle
                                 % disp(rteGenerationData(rteNo).portName)
                                 rteGenerationData(rteNo).defValue = 0;
                             end
-                        else
-                            %! Sneak peak code
-                            misLen = length(napp.missingPorts) + 1;
-                            napp.missingPorts(misLen).rnblName = mdlData.rnblData(rnblNo).rnblName;
-                            napp.missingPorts(misLen).signalName = mdlData.rnblData(rnblNo).outportData(outNo).signalName;
-                            napp.missingPorts(misLen).portType = 'outPort';
-                            disp(mdlData.rnblData(rnblNo).outportData(outNo).portName)
+                        % else
+                        %     %! Sneak peak code
+                        %     misLen = length(napp.missingPorts) + 1;
+                        %     napp.missingPorts(misLen).rnblName = mdlData.rnblData(rnblNo).rnblName;
+                        %     napp.missingPorts(misLen).signalName = mdlData.rnblData(rnblNo).outportData(outNo).signalName;
+                        %     napp.missingPorts(misLen).portType = 'outPort';
+                        %     disp(mdlData.rnblData(rnblNo).outportData(outNo).portName)
                         end
                     end
 
@@ -892,20 +894,20 @@ classdef codeIntegration < handle
                             rteGenerationData(rteNo).isVoid = 0;
                             rteGenerationData(rteNo).isBus = 0;
 
-                            splitName = strsplit(mdlData.funcData(funcNo).funcName,'_');
-                            smlFunName = strjoin(splitName(2 : length(splitName)),'_');
+                            splitName = strsplit(mdlData.funcData(funcNo).portName,'_');
+                            smlPortName = strjoin(splitName(2 : length(splitName)),'_');
                             funArgNo = 0;
                             for funInpNo = 1 : length(mdlData.funcData(funcNo).inArg)
                                 if ~isequal(mdlData.funcData(funcNo).srcBlocks{funInpNo},'Ground')
                                     funArgNo = funArgNo + 1;
-                                    rteGenerationData(rteNo).signalName{funArgNo} = [mdlData.funcData(funcNo).funcName '_' mdlData.funcData(funcNo).inArg{funInpNo}];
+                                    rteGenerationData(rteNo).signalName{funArgNo} = [mdlData.funcData(funcNo).portName '_' mdlData.funcData(funcNo).inArg{funInpNo}];
                                     rteGenerationData(rteNo).portType{funArgNo} = 'inPort';
                                     [rteGenerationData(rteNo).argName{funArgNo}, rteGenerationData(rteNo).dataType{funArgNo}, rteGenerationData(rteNo).dataTypeMisMatch{funArgNo}] = ...
                                     napp.getFunArg(headerRteData.argNames(funProtoIdx(1)).funArg, mdlData.funcData(funcNo).inBase{funInpNo}, mdlData.funcData(funcNo).inArg{funInpNo});
 
                                     rteGenerationData(rteNo).portName{funArgNo} = mdlData.funcData(funcNo).portName;
                                     rteGenerationData(rteNo).dataElement{funArgNo} = [mdlData.funcData(funcNo).oprName '_' mdlData.funcData(funcNo).inArg{funInpNo}];
-                                    rteGenerationData(rteNo).varName{funArgNo} = [smlFunName '_' mdlData.funcData(funcNo).inArg{funInpNo}];
+                                    rteGenerationData(rteNo).varName{funArgNo} = [smlPortName '_' mdlData.funcData(funcNo).inArg{funInpNo}];
 
                                     rteGenerationData(rteNo).defValue{funArgNo} = 0; %default value not found in arxml
 
@@ -923,14 +925,14 @@ classdef codeIntegration < handle
                             for funOutNo = 1 : length(mdlData.funcData(funcNo).outArg)
                                 if ~isequal(mdlData.funcData(funcNo).dstBlocks{funOutNo},'Terminator')
                                     funArgNo = funArgNo + 1;
-                                    rteGenerationData(rteNo).signalName{funArgNo} = [mdlData.funcData(funcNo).funcName '_' mdlData.funcData(funcNo).outArg{funOutNo}];
+                                    rteGenerationData(rteNo).signalName{funArgNo} = [mdlData.funcData(funcNo).portName '_' mdlData.funcData(funcNo).outArg{funOutNo}];
                                     rteGenerationData(rteNo).portType{funArgNo} = 'outPort';
                                     [rteGenerationData(rteNo).argName{funArgNo}, rteGenerationData(rteNo).dataType{funArgNo}, rteGenerationData(rteNo).dataTypeMisMatch{funArgNo}] = ...
                                     napp.getFunArg(headerRteData.argNames(funProtoIdx(1)).funArg, mdlData.funcData(funcNo).outBase{funOutNo}, mdlData.funcData(funcNo).outArg{funOutNo});
 
                                     rteGenerationData(rteNo).portName{funArgNo} = mdlData.funcData(funcNo).portName;
                                     rteGenerationData(rteNo).dataElement{funArgNo} = [mdlData.funcData(funcNo).oprName '_' mdlData.funcData(funcNo).outArg{funOutNo}];
-                                    rteGenerationData(rteNo).varName{funArgNo} = [smlFunName '_' mdlData.funcData(funcNo).outArg{funOutNo}];
+                                    rteGenerationData(rteNo).varName{funArgNo} = [smlPortName '_' mdlData.funcData(funcNo).outArg{funOutNo}];
 
                                     rteGenerationData(rteNo).defValue{funArgNo} = 0; %default value not found in arxml
                                    
@@ -962,6 +964,8 @@ classdef codeIntegration < handle
         function createLCTBlocks(napp)
             cd(napp.integPath);
             
+            testMode = 1;
+
             autTypesMap = containers.Map({'boolean','sint16','sint32','sint8','uint16','uint32','uint8','float32','float64'},{'boolean_T','int16_T','int32_T','int8_T','uint16_T','uint32_T','uint8_T','real_T','real_T'});
             simTypesMap = containers.Map({'boolean_T','int16_T','int32_T','int8_T','uint16_T','uint32_T','uint8_T','real_T'},{'boolean','int16','int32','int8','uint16','uint32','uint8','double'});
 
@@ -978,8 +982,8 @@ classdef codeIntegration < handle
                     napp.lctData(lctIdx).rnblName = mdlData.rnblData(rnblNo).rnblName;
                     napp.lctData(lctIdx).sFunName = [cmpName '_Code_' mdlData.rnblData(rnblNo).rnblName];
 
-                    rteCodeFid = fopen([[cmpName '_' mdlData.rnblData(rnblNo).rnblName '.c']],'w');
-                    rteHeadFid = fopen([[cmpName '_' mdlData.rnblData(rnblNo).rnblName '.h']],'w');
+                    rteCodeFid = fopen([cmpName '_' mdlData.rnblData(rnblNo).rnblName '.c'],'w');
+                    rteHeadFid = fopen([cmpName '_' mdlData.rnblData(rnblNo).rnblName '.h'],'w');
                     
                     fprintf(rteCodeFid, '#include "%s_%s.h"\n\n', cmpName, mdlData.rnblData(rnblNo).rnblName);
                     fprintf(rteHeadFid, '#include "%s_autosar_rtw\%s.h"\n\n', cmpName, cmpName);
