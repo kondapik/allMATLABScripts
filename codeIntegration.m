@@ -864,7 +864,7 @@ classdef codeIntegration < handle
                             rteGenerationData(rteNo).varName = strjoin(portSplit,'_');
                             
                             glbConfDataIdx = find(contains({glbConfigRteData.retNames.oldFun},headerRteData.callExp(funNameIdx(1)).oldFun));
-                            rteGenerationData(rteNo).funProto = strrep(rteGenerationData(rteNo).funProto, glbConfigRteData.retNames(glbConfDataIdx(1)).retVar, rteGenerationData(rteNo).varName);
+                            rteGenerationData(rteNo).funProto = strrep(rteGenerationData(rteNo).funProto, glbConfigRteData.retNames(glbConfDataIdx(1)).retVar, rteGenerationData(rteNo).signalName);
 
                             portSplit = regexp(rteGenerationData(rteNo).signalName,'(?<portName>\w+_(P|R))_(?<dataElem>\w+)','names');
                             rteGenerationData(rteNo).portName = portSplit.portName;
