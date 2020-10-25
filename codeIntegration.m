@@ -901,7 +901,7 @@ classdef codeIntegration < handle
                                 if ~isequal(mdlData.funcData(funcNo).srcBlocks{funInpNo},'Ground')
                                     funArgNo = funArgNo + 1;
                                     rteGenerationData(rteNo).signalName{funArgNo} = [mdlData.funcData(funcNo).portName '_' mdlData.funcData(funcNo).inArg{funInpNo}];
-                                    rteGenerationData(rteNo).portType{funArgNo} = 'inPort';
+                                    rteGenerationData(rteNo).portType{funArgNo} = 'outPort';
                                     [rteGenerationData(rteNo).argName{funArgNo}, rteGenerationData(rteNo).dataType{funArgNo}, rteGenerationData(rteNo).dataTypeMisMatch{funArgNo}] = ...
                                     napp.getFunArg(headerRteData.argNames(funProtoIdx(1)).funArg, mdlData.funcData(funcNo).inBase{funInpNo}, mdlData.funcData(funcNo).inArg{funInpNo});
 
@@ -926,7 +926,7 @@ classdef codeIntegration < handle
                                 if ~isequal(mdlData.funcData(funcNo).dstBlocks{funOutNo},'Terminator')
                                     funArgNo = funArgNo + 1;
                                     rteGenerationData(rteNo).signalName{funArgNo} = [mdlData.funcData(funcNo).portName '_' mdlData.funcData(funcNo).outArg{funOutNo}];
-                                    rteGenerationData(rteNo).portType{funArgNo} = 'outPort';
+                                    rteGenerationData(rteNo).portType{funArgNo} = 'inPort';
                                     [rteGenerationData(rteNo).argName{funArgNo}, rteGenerationData(rteNo).dataType{funArgNo}, rteGenerationData(rteNo).dataTypeMisMatch{funArgNo}] = ...
                                     napp.getFunArg(headerRteData.argNames(funProtoIdx(1)).funArg, mdlData.funcData(funcNo).outBase{funOutNo}, mdlData.funcData(funcNo).outArg{funOutNo});
 
@@ -969,7 +969,7 @@ classdef codeIntegration < handle
             autTypesMap = containers.Map({'boolean','sint16','sint32','sint8','uint16','uint32','uint8','float32','float64'},{'boolean_T','int16_T','int32_T','int8_T','uint16_T','uint32_T','uint8_T','real_T','real_T'});
             simTypesMap = containers.Map({'boolean_T','int16_T','int32_T','int8_T','uint16_T','uint32_T','uint8_T','real_T'},{'boolean','int16','int32','int8','uint16','uint32','uint8','double'});
 
-            napp.lctData = struct('cmpName',{},'rnblName',{},'sFunName',{},'inputData',{},'outputData',{});
+            napp.lctData = struct('cmpName',{},'rnblName',{},'sFunName',{},'inputData',{},'outputData',{}, 'codePreFill',{});
             napp.allPortMap = containers.Map();
 
             if testMode
@@ -995,7 +995,7 @@ classdef codeIntegration < handle
                     fprintf(rteCodeFid, '#include "%s_%s.h"\n\n', cmpName, mdlData.rnblData(rnblNo).rnblName);
                     fprintf(rteHeadFid, '#include "%s_autosar_rtw\%s.h"\n\n', cmpName, cmpName);
 
-                    inputData = struct('portName',{},'dataElement',{},'sigName',{},'defValue',{},'autoType',{},'simType',{},'varName',{},'dataType',{},'isBus',{},'busElement',{},'isError',{});
+                    inputData = struct('portName',{},'dataElement',{},'sigName',{},'defValue',{},'autoType',{},'simType',{},'varName',{},'dataType',{},'isBus',{},'busElement',{},'isError',{},'isGlbConfig',{});
                     outputData = inputData;
                     lctPortMap = containers.Map(); % Map of block port number to signal data element
                     inpNo = 0;
@@ -1025,7 +1025,7 @@ classdef codeIntegration < handle
                                     codePreFill.defValueAssign = [codePreFill.defValueAssign 10 9 inputData(inpNo).sigName '.' inputData(inpNo).busElement ' = ' inputData(inpNo).defValue ';']; 
                                     codePreFill.inputVarArg = [codePreFill.inputVarArg 10 9 9 9 inputData(inpNo).autoType ' *u' num2str(inpNo) ','];
                                     codePreFill.lctInpSpec = [codePreFill.lctInpSpec ' ' inputData(inpNo).simType ' u' num2str(inpNo) '[1], '];
-                                    codePreFill.inputVarAssign = [codePreFill.inputVarAssign 10 9 inputData(inpNo).sigName '.' inputData(inpNo).busElement ' = *u' num2str(inpNo) ','];
+                                    codePreFill.inputVarAssign = [codePreFill.inputVarAssign 10 9 inputData(inpNo).sigName '.' inputData(inpNo).busElement ' = *u' num2str(inpNo) ';'];
                                 end
                             else
                                 fprintf(rteCodeFid, '\t*%s = %s;\n', rteData(rteNo).argName, rteData(rteNo).signalName);
@@ -1035,7 +1035,7 @@ classdef codeIntegration < handle
                                 codePreFill.defValueAssign = [codePreFill.defValueAssign 10 9 inputData(inpNo).sigName ' = ' inputData(inpNo).defValue ';']; 
                                 codePreFill.inputVarArg = [codePreFill.inputVarArg 10 9 9 9 inputData(inpNo).autoType ' *u' num2str(inpNo) ','];
                                 codePreFill.lctInpSpec = [codePreFill.lctInpSpec ' ' inputData(inpNo).simType ' u' num2str(inpNo) '[1], '];
-                                codePreFill.inputVarAssign = [codePreFill.inputVarAssign 10 9 inputData(inpNo).sigName ' = *u' num2str(inpNo) ','];
+                                codePreFill.inputVarAssign = [codePreFill.inputVarAssign 10 9 inputData(inpNo).sigName ' = *u' num2str(inpNo) ';'];
                             end
 
                             % rte error is uint8 and default value
@@ -1047,48 +1047,49 @@ classdef codeIntegration < handle
                             if rteData(rteNo).isBus
                                 busElems = napp.idtrStructMap(rteData(rteNo).dataType);
                                 for elemNo = 1 : length(busElems)
-                                    fprintf(rteCodeFid, '\t%s.%s = %s.%s;\n', rteData(rteNo).varName, busElems(elemNo).varName, rteData(rteNo).argName, busElems(elemNo).varName);
+                                    fprintf(rteCodeFid, '\t%s.%s = %s.%s;\n', rteData(rteNo).signalName, busElems(elemNo).varName, rteData(rteNo).argName, busElems(elemNo).varName);
+                                    [outputData, outNo, lctPortMap] = napp.lctPortData(outputData, lctPortMap, rteData(rteNo), autTypesMap, simTypesMap, busElems(elemNo).varName, busElems(elemNo).dataType);
+
+                                    codePreFill.defValueAssign = [codePreFill.defValueAssign 10 9 outputData(outNo).sigName '.' outputData(outNo).busElement ' = ' outputData(outNo).defValue ';']; 
+                                    codePreFill.outputVarArg = [codePreFill.outputVarArg 10 9 9 9 outputData(outNo).autoType ' *y' num2str(outNo) ','];
+                                    codePreFill.lctOutSpec = [codePreFill.lctOutSpec ' ' outputData(outNo).simType ' y' num2str(outNo) '[1], '];
+                                    codePreFill.outputVarAssign = [codePreFill.outputVarAssign 10 9  '*y' num2str(outNo) ' = ' outputData(outNo).sigName '.' outputData(outNo).busElement ';'];
                                 end
                             else
-                                fprintf(rteCodeFid, '\t%s = %s;\n', rteData(rteNo).varName, rteData(rteNo).argName);
+                                fprintf(rteCodeFid, '\t%s = %s;\n', rteData(rteNo).signalName, rteData(rteNo).argName);
+                                [outputData, outNo, lctPortMap] = napp.lctPortData(outputData, lctPortMap, rteData(rteNo), autTypesMap, simTypesMap);
+
+                                codePreFill.defValueAssign = [codePreFill.defValueAssign 10 9 outputData(outNo).sigName ' = ' outputData(outNo).defValue ';']; 
+                                codePreFill.outputVarArg = [codePreFill.outputVarArg 10 9 9 9 outputData(outNo).autoType ' *y' num2str(outNo) ','];
+                                codePreFill.lctOutSpec = [codePreFill.lctOutSpec ' ' outputData(outNo).simType ' y' num2str(outNo) '[1], '];
+                                codePreFill.outputVarAssign = [codePreFill.outputVarAssign 10 9  '*y' num2str(outNo) ' = ' outputData(outNo).sigName ';'];
                             end
                             fprintf(rteCodeFid, '}\n');
+                        elseif isequal(rteData(rteNo).portType,'glbConfig')
                             %Adding inport data for connection ref
-                            outNo = length(outputData) + 1; 
-                            outputData(outNo).portName = rteData(rteNo).portName;
-                            outputData(outNo).dataElement = rteData(rteNo).dataElement;
-                            outputData(outNo).sigName = rteData(rteNo).signalName;
-                            outputData(outNo).defValue = rteData(rteNo).defValue;
-                            outputData(outNo).varName = rteData(rteNo).varName;
-                            outputData(outNo).dataType = rteData(rteNo).dataType;
-                            outputData(outNo).autoType = autTypesMap(rteData(rteNo).dataType);
-                            outputData(outNo).simType = simTypesMap(outputData(outNo).autoType);
+                            [inputData, inpNo, lctPortMap] = napp.lctPortData(inputData, lctPortMap, rteData(rteNo), autTypesMap, simTypesMap);
+                            inputData(inpNo).isGlbConfig = 1;
 
-                            lctPortMap(outputData(outNo).dataElement) = outNo;
+                            codePreFill.defValueAssign = [codePreFill.defValueAssign 10 9 inputData(inpNo).sigName ' = ' inputData(inpNo).defValue ';']; 
+                            codePreFill.inputVarArg = [codePreFill.inputVarArg 10 9 9 9 inputData(inpNo).autoType ' *u' num2str(inpNo) ','];
+                            codePreFill.lctInpSpec = [codePreFill.lctInpSpec ' ' inputData(inpNo).simType ' u' num2str(inpNo) '[1], '];
+                            codePreFill.inputVarAssign = [codePreFill.inputVarAssign 10 9 inputData(inpNo).sigName ' = *u' num2str(inpNo) ';'];
+                        elseif iscell(rteData(rteNo).portType)
+                            
                         else
-                            %Adding inport data for connection ref
-                            inpNo = length(inputData) + 1; 
-                            inputData(inpNo).portName = rteData(rteNo).portName;
-                            inputData(inpNo).dataElement = rteData(rteNo).dataElement;
-                            inputData(inpNo).sigName = rteData(rteNo).signalName;
-                            inputData(inpNo).defValue = rteData(rteNo).defValue;
-                            inputData(inpNo).varName = rteData(rteNo).varName;
-                            inputData(inpNo).dataType = rteData(rteNo).dataType;
-                            inputData(inpNo).autoType = autTypesMap(rteData(rteNo).dataType);
-                            inputData(inpNo).simType = simTypesMap(inputData(inpNo).autoType);
-
-                            lctPortMap(inputData(inpNo).dataElement) = inpNo;
+                            %! If code comes here something is wrong
                         end
                         fprintf(rteCodeFid, '\n');
 
                         if isequal(rteNo,length(rteData)) || ~isequal(rteData(rteNo).portName, rteData(rteNo + 1).portName)
-                            napp.allPortMap([napp.lctData(lctIdx).cmpName '/' rteData(rteNo).portName]) = struct('sFunName',napp.lctData(lctIdx).sFunName,'portMap',lctPortMap);
+                            napp.allPortMap([napp.lctData(lctIdx).cmpName '/' rteData(rteNo).portName]) = struct('rnblName', napp.lctData(lctIdx).rnblName, 'sFunName', napp.lctData(lctIdx).sFunName, 'isBus', rteData(rteNo).isBus ,'portMap', lctPortMap); %TODO considering all dataElements in a port are buses or none of them are
                             lctPortMap = containers.Map(); % Resetting the map for next port
                         end
                     end
 
                     napp.lctData(lctIdx).inputData = inputData;
                     napp.lctData(lctIdx).outputData = outputData;
+                    napp.lctData(lctIdx).codePreFill = codePreFill;
 
                     %? Add wrapper functions
                     %* Adding starter wrapper
