@@ -969,7 +969,7 @@ classdef codeIntegration < handle
             autTypesMap = containers.Map({'boolean','sint16','sint32','sint8','uint16','uint32','uint8','float32','float64'},{'boolean_T','int16_T','int32_T','int8_T','uint16_T','uint32_T','uint8_T','real_T','real_T'});
             simTypesMap = containers.Map({'boolean_T','int16_T','int32_T','int8_T','uint16_T','uint32_T','uint8_T','real_T'},{'boolean','int16','int32','int8','uint16','uint32','uint8','double'});
 
-            napp.lctData = struct('cmpName',{},'rnblName',{},'sFunName',{},'inputData',{},'outputData',{}, 'codePreFill',{});
+            napp.lctData = struct('cmpName',{},'rnblName',{},'sampleTime',{},'sFunName',{},'inputData',{},'outputData',{}, 'codePreFill',{});
             napp.allPortMap = containers.Map();
 
             if testMode
@@ -987,6 +987,7 @@ classdef codeIntegration < handle
                     lctIdx = length(napp.lctData) + 1;
                     napp.lctData(lctIdx).cmpName = cmpName;
                     napp.lctData(lctIdx).rnblName = mdlData.rnblData(rnblNo).rnblName;
+                    napp.lctData(lctIdx).sampleTime = mdlData.rnblData(rnblNo).sampleTime;
                     napp.lctData(lctIdx).sFunName = [cmpName '_Code_' mdlData.rnblData(rnblNo).rnblName];
 
                     rteCodeFid = fopen([cmpName '_' mdlData.rnblData(rnblNo).rnblName '.c'],'w');
@@ -1024,7 +1025,7 @@ classdef codeIntegration < handle
 
                                     codePreFill.defValueAssign = [codePreFill.defValueAssign 10 9 inputData(inpNo).sigName '.' inputData(inpNo).busElement ' = ' inputData(inpNo).defValue ';']; 
                                     codePreFill.inputVarArg = [codePreFill.inputVarArg 10 9 9 9 inputData(inpNo).autoType ' *u' num2str(inpNo) ','];
-                                    codePreFill.lctInpSpec = [codePreFill.lctInpSpec ' ' inputData(inpNo).simType ' u' num2str(inpNo) '[1], '];
+                                    codePreFill.lctInpSpec = [codePreFill.lctInpSpec ' ' inputData(inpNo).simType ' u' num2str(inpNo) '[1],'];
                                     codePreFill.inputVarAssign = [codePreFill.inputVarAssign 10 9 inputData(inpNo).sigName '.' inputData(inpNo).busElement ' = *u' num2str(inpNo) ';'];
                                 end
                             else
@@ -1034,7 +1035,7 @@ classdef codeIntegration < handle
 
                                 codePreFill.defValueAssign = [codePreFill.defValueAssign 10 9 inputData(inpNo).sigName ' = ' inputData(inpNo).defValue ';']; 
                                 codePreFill.inputVarArg = [codePreFill.inputVarArg 10 9 9 9 inputData(inpNo).autoType ' *u' num2str(inpNo) ','];
-                                codePreFill.lctInpSpec = [codePreFill.lctInpSpec ' ' inputData(inpNo).simType ' u' num2str(inpNo) '[1], '];
+                                codePreFill.lctInpSpec = [codePreFill.lctInpSpec ' ' inputData(inpNo).simType ' u' num2str(inpNo) '[1],'];
                                 codePreFill.inputVarAssign = [codePreFill.inputVarAssign 10 9 inputData(inpNo).sigName ' = *u' num2str(inpNo) ';'];
                             end
 
@@ -1055,7 +1056,7 @@ classdef codeIntegration < handle
 
                                     codePreFill.defValueAssign = [codePreFill.defValueAssign 10 9 outputData(outNo).sigName '.' outputData(outNo).busElement ' = ' outputData(outNo).defValue ';']; 
                                     codePreFill.outputVarArg = [codePreFill.outputVarArg 10 9 9 9 outputData(outNo).autoType ' *y' num2str(outNo) ','];
-                                    codePreFill.lctOutSpec = [codePreFill.lctOutSpec ' ' outputData(outNo).simType ' y' num2str(outNo) '[1], '];
+                                    codePreFill.lctOutSpec = [codePreFill.lctOutSpec ' ' outputData(outNo).simType ' y' num2str(outNo) '[1],'];
                                     codePreFill.outputVarAssign = [codePreFill.outputVarAssign 10 9  '*y' num2str(outNo) ' = ' outputData(outNo).sigName '.' outputData(outNo).busElement ';'];
                                 end
                             else
@@ -1064,7 +1065,7 @@ classdef codeIntegration < handle
 
                                 codePreFill.defValueAssign = [codePreFill.defValueAssign 10 9 outputData(outNo).sigName ' = ' outputData(outNo).defValue ';']; 
                                 codePreFill.outputVarArg = [codePreFill.outputVarArg 10 9 9 9 outputData(outNo).autoType ' *y' num2str(outNo) ','];
-                                codePreFill.lctOutSpec = [codePreFill.lctOutSpec ' ' outputData(outNo).simType ' y' num2str(outNo) '[1], '];
+                                codePreFill.lctOutSpec = [codePreFill.lctOutSpec ' ' outputData(outNo).simType ' y' num2str(outNo) '[1],'];
                                 codePreFill.outputVarAssign = [codePreFill.outputVarAssign 10 9  '*y' num2str(outNo) ' = ' outputData(outNo).sigName ';'];
                             end
                             fprintf(rteCodeFid, '}\n');
@@ -1078,7 +1079,7 @@ classdef codeIntegration < handle
 
                             codePreFill.defValueAssign = [codePreFill.defValueAssign 10 9 inputData(inpNo).sigName ' = ' inputData(inpNo).defValue ';']; 
                             codePreFill.inputVarArg = [codePreFill.inputVarArg 10 9 9 9 inputData(inpNo).autoType ' *u' num2str(inpNo) ','];
-                            codePreFill.lctInpSpec = [codePreFill.lctInpSpec ' ' inputData(inpNo).simType ' u' num2str(inpNo) '[1], '];
+                            codePreFill.lctInpSpec = [codePreFill.lctInpSpec ' ' inputData(inpNo).simType ' u' num2str(inpNo) '[1],'];
                             codePreFill.inputVarAssign = [codePreFill.inputVarAssign 10 9 inputData(inpNo).sigName ' = *u' num2str(inpNo) ';'];
                         elseif iscell(rteData(rteNo).portType)
                             for argNo = 1 : length(rteData(rteNo).portType)
@@ -1092,7 +1093,7 @@ classdef codeIntegration < handle
 
                                     codePreFill.defValueAssign = [codePreFill.defValueAssign 10 9 inputData(inpNo).sigName ' = ' inputData(inpNo).defValue ';']; 
                                     codePreFill.inputVarArg = [codePreFill.inputVarArg 10 9 9 9 inputData(inpNo).autoType ' *u' num2str(inpNo) ','];
-                                    codePreFill.lctInpSpec = [codePreFill.lctInpSpec ' ' inputData(inpNo).simType ' u' num2str(inpNo) '[1], '];
+                                    codePreFill.lctInpSpec = [codePreFill.lctInpSpec ' ' inputData(inpNo).simType ' u' num2str(inpNo) '[1],'];
                                     codePreFill.inputVarAssign = [codePreFill.inputVarAssign 10 9 inputData(inpNo).sigName ' = *u' num2str(inpNo) ';'];
                                 elseif isequal(rteData(rteNo).portType{argNo},'outPort')
                                     fprintf(rteCodeFid, '\t%s = %s;\n', rteData(rteNo).signalName{argNo}, rteData(rteNo).argName{argNo});
@@ -1100,7 +1101,7 @@ classdef codeIntegration < handle
 
                                     codePreFill.defValueAssign = [codePreFill.defValueAssign 10 9 outputData(outNo).sigName ' = ' outputData(outNo).defValue ';']; 
                                     codePreFill.outputVarArg = [codePreFill.outputVarArg 10 9 9 9 outputData(outNo).autoType ' *y' num2str(outNo) ','];
-                                    codePreFill.lctOutSpec = [codePreFill.lctOutSpec ' ' outputData(outNo).simType ' y' num2str(outNo) '[1], '];
+                                    codePreFill.lctOutSpec = [codePreFill.lctOutSpec ' ' outputData(outNo).simType ' y' num2str(outNo) '[1],'];
                                     codePreFill.outputVarAssign = [codePreFill.outputVarAssign 10 9  '*y' num2str(outNo) ' = ' outputData(outNo).sigName ';'];
                                 end
                             end
@@ -1124,39 +1125,41 @@ classdef codeIntegration < handle
                     %* Adding starter wrapper
                     fprintf(rteCodeFid, '//Start function - Initialization function wrapper\n');
                     % Adding function proto
-                    fprintf(rteHeadFid, 'extern void %s_Start_wrapper(void);\n\n', napp.lctData(lctIdx).cmpName);
+                    fprintf(rteHeadFid, 'extern void %s_Start_wrapper(void);\n\n', napp.lctData(lctIdx).rnblName);
 
-                    fprintf(rteCodeFid, 'void %s_Start_wrapper(void)\n{\n', napp.lctData(lctIdx).cmpName);
-                    for outNo = 1 : length(napp.lctData(lctIdx).outputData)
-                        if napp.lctData(lctIdx).outputData(outNo).isBus
-                            busElems = napp.idtrStructMap(napp.lctData(lctIdx).outputData(outNo).dataType);
-                            for elemNo = 1 : length(busElems)
-                                fprintf(rteCodeFid, '%s.%s = 0;\n',napp.lctData(lctIdx).outputData(outNo).varName, busElems(elemNo).varName);
-                            end
-                        else
-                            fprintf(rteCodeFid, '\t%s = %s;\n', napp.lctData(lctIdx).outputData(outNo).varName, napp.lctData(lctIdx).outputData(outNo).defValue);
-                        end
-                    end
-                    fprintf(rteCodeFid, '%s_Init();\n',napp.lctData(lctIdx).cmpName);
+                    fprintf(rteCodeFid, 'void %s_Start_wrapper(void)\n{\n', napp.lctData(lctIdx).rnblName);
+                    fprintf(rteCodeFid, '%s', napp.lctData(lctIdx).codePreFill.defValueAssign);
+                    fprintf(rteCodeFid, '\n%s_Init();\n',napp.lctData(lctIdx).cmpName);
                     fprintf(rteCodeFid, '}\n\n');
 
                     %* Adding output wrapper
                     fprintf(rteCodeFid, '//Output function - Runnable function wrapper\n');
                     % Adding function proto
-                    fprintf(rteHeadFid, 'extern void %s_Outputs_wrapper(\n', napp.lctData(lctIdx).rnblName);
-                    fprintf(rteCodeFid, 'extern void %s_Outputs_wrapper(\n', napp.lctData(lctIdx).rnblName);
+                    fprintf(rteHeadFid, 'extern void %s_Outputs_wrapper(', napp.lctData(lctIdx).rnblName);
+                    fprintf(rteHeadFid, '%s%s);', napp.lctData(lctIdx).codePreFill.inputVarArg, napp.lctData(lctIdx).codePreFill.outputVarArg(1 : length(napp.lctData(lctIdx).codePreFill.outputVarArg) - 1));
 
-                    for rteNo = 1 : length(rteData)
-                        if isequal(rteData(rteNo).portType,'outPort')
-                            % autTypesMap(rteData(rteNo).dataType)
+                    fprintf(rteCodeFid, 'extern void %s_Outputs_wrapper(', napp.lctData(lctIdx).rnblName);
+                    fprintf(rteCodeFid, '%s%s)', napp.lctData(lctIdx).codePreFill.inputVarArg, napp.lctData(lctIdx).codePreFill.outputVarArg(1 : length(napp.lctData(lctIdx).codePreFill.outputVarArg) - 1));
+                    fprintf(rteCodeFid, '{\n');
+                    fprintf(rteCodeFid, '%s', napp.lctData(lctIdx).codePreFill.inputVarAssign);
+                    fprintf(rteCodeFid, '\n%s();\n',napp.lctData(lctIdx).rnblName);
+                    fprintf(rteCodeFid, '%s', napp.lctData(lctIdx).codePreFill.outputVarAssign);
+                    fprintf(rteCodeFid, '\n}\n');
 
-                        else
-                        end
-                    end
-
-                    %Adding legacy code block
+                    %!Adding legacy code block
                     % limits of simulink canvas : -32768 to 32767
-
+                    lct_spec = legacy_code('initialize');
+                    lct_spec.SampleTime = napp.lctData(lctIdx).sampleTime;
+                    %lct_spec.IncPaths  = {'CtrlPltMt_autosar_rtw'};
+                    lct_spec.SourceFiles = {[napp.lctData(lctIdx).cmpName '_' napp.lctData(lctIdx).rnblName '.c'], [napp.lctData(lctIdx).cmpName ' _autosar_rtw\' napp.lctData(lctIdx).cmpName '.c']};
+                    lct_spec.HeaderFiles = {[napp.lctData(lctIdx).cmpName '_' napp.lctData(lctIdx).rnblName '.h']};
+                    lct_spec.SFunctionName = napp.lctData(lctIdx).sFunName;
+                    lct_spec.StartFcnSpec = ['void ' napp.lctData(lctIdx).cmpName '_Start_wrapper(void)'];
+                    lct_spec.OutputFcnSpec = ['void ' napp.lctData(lctIdx).rnblName '_Outputs_wrapper(' napp.lctData(lctIdx).codePreFill.lctInpSpec napp.lctData(lctIdx).codePreFill.lctOutSpec(1 : length(napp.lctData(lctIdx).codePreFill.lctOutSpec) - 1) ')'];
+                    if testMode
+                        legacy_code('generate_for_sim', lct_spec, 'MIL_Functional_TestHarness_CtrlPltMt');
+                        legacy_code('slblock_generate', lct_spec, 'MIL_Functional_TestHarness_CtrlPltMt');
+                    end
                 end
             end
         end
