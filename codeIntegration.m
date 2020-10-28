@@ -81,7 +81,9 @@ classdef codeIntegration < handle
                     napp.dataTypeMap('Dem_UdsStatusByteType') = 'uint8';
                     napp.dataTypeMap('CANSM_BSWM_MG') = 'uint8';
                     matNames = who('-file', 'RootSWComposition_IntegrationData.mat');
-                    if ismember('modelData', matNames)
+                    if ismember('rteData', matNames)
+                        createLCTBlocks(napp)
+                    elseif ismember('modelData', matNames)
                         readRteFiles(napp);
                     else
                         collectModelData(napp);
@@ -706,7 +708,7 @@ classdef codeIntegration < handle
                 %? Updating rteData for rte call generation
                 mdlData = napp.allMdlData(cmpName);
                 for rnblNo = 1 : length(mdlData.rnblData)
-                    rteGenerationData = struct('signalName',{},'portType',{},'funProto',{},'argName',{},'dataType',{},'varName',{},'defValue',{},'portName',{},'dataElement',{},'retError',{},'isBus',{},'isVoid',{},'dataTypeMisMatch',{});
+                    rteGenerationData = struct('signalName',{},'portType',{},'funProto',{},'argName',{},'dataType',{},'varName',{},'defValue',{},'portName',{},'dataElement',{},'retError',{},'isBus',{},'isVoid',{},'dataTypeMisMatch',{},'doNothing',{});
 
                     for inpNo = 1 : length(mdlData.rnblData(rnblNo).inportData)
                         waitbar(((cmpNo-1)/length(napp.allASWCmp)) + ((0.25 * inpNo/length(mdlData.rnblData(rnblNo).inportData)) * (rnblNo/length(mdlData.rnblData)) * (1/length(napp.allASWCmp))),...
@@ -879,16 +881,16 @@ classdef codeIntegration < handle
                         waitbar(((cmpNo-1)/length(napp.allASWCmp)) + ((funcNo/length(mdlData.funcData)) * (rnblNo/length(mdlData.rnblData)) * (1/length(napp.allASWCmp))),...
                                 napp.progBar,{'Collecting RTE data(3/5)',sprintf('Collecting client - server RTE calls of ''%s'' runnable...',regexprep(mdlData.rnblData(rnblNo).rnblName,'_','\\_'))});
                         
+                        funNameIdx = find(contains({headerRteData.callExp.oldFun}, mdlData.funcData(funcNo).funcName));
+                        rteNo = length(rteGenerationData) + 1;
+
+                        %* Getting function proto based on <oldFun> in callExp 
+                        funProtoIdx = find(contains({headerRteData.funProto.funProto},headerRteData.callExp(funNameIdx(1)).oldFun));
+                        rteGenerationData(rteNo).funProto = strrep(headerRteData.funProto(funProtoIdx(1)).funProto, headerRteData.callExp(funNameIdx(1)).oldFun, headerRteData.callExp(funNameIdx(1)).xpFun);
+
                         % Checking if function caller is used i.e connected to something
                         if ~((isempty(mdlData.funcData(funcNo).dstBlocks) || isequal(mdlData.funcData(funcNo).dstBlocks, repmat({'Terminator'},size(mdlData.funcData(funcNo).dstBlocks)))) && ...
                             (isempty(mdlData.funcData(funcNo).srcBlocks) || isequal(mdlData.funcData(funcNo).srcBlocks, repmat({'Ground'},size(mdlData.funcData(funcNo).srcBlocks)))))
-                            
-                            funNameIdx = find(contains({headerRteData.callExp.oldFun}, mdlData.funcData(funcNo).funcName));
-                            rteNo = length(rteGenerationData) + 1;
-
-                            %* Getting function proto based on <oldFun> in callExp 
-                            funProtoIdx = find(contains({headerRteData.funProto.funProto},headerRteData.callExp(funNameIdx(1)).oldFun));
-                            rteGenerationData(rteNo).funProto = strrep(headerRteData.funProto(funProtoIdx(1)).funProto, headerRteData.callExp(funNameIdx(1)).oldFun, headerRteData.callExp(funNameIdx(1)).xpFun);
                             
                             %TODO client server interfaces are not void functions and doest return a structure (at least for the moment)
                             rteGenerationData(rteNo).isVoid = 0;
@@ -900,7 +902,7 @@ classdef codeIntegration < handle
                             for funInpNo = 1 : length(mdlData.funcData(funcNo).inArg)
                                 if ~isequal(mdlData.funcData(funcNo).srcBlocks{funInpNo},'Ground')
                                     funArgNo = funArgNo + 1;
-                                    rteGenerationData(rteNo).signalName{funArgNo} = [mdlData.funcData(funcNo).portName '_' mdlData.funcData(funcNo).inArg{funInpNo}];
+                                    rteGenerationData(rteNo).signalName{funArgNo} = [mdlData.funcData(funcNo).portName '_' mdlData.funcData(funcNo).oprName '_' mdlData.funcData(funcNo).inArg{funInpNo}];
                                     rteGenerationData(rteNo).portType{funArgNo} = 'outPort';
                                     [rteGenerationData(rteNo).argName{funArgNo}, rteGenerationData(rteNo).dataType{funArgNo}, rteGenerationData(rteNo).dataTypeMisMatch{funArgNo}] = ...
                                     napp.getFunArg(headerRteData.argNames(funProtoIdx(1)).funArg, mdlData.funcData(funcNo).inBase{funInpNo}, mdlData.funcData(funcNo).inArg{funInpNo});
@@ -925,7 +927,7 @@ classdef codeIntegration < handle
                             for funOutNo = 1 : length(mdlData.funcData(funcNo).outArg)
                                 if ~isequal(mdlData.funcData(funcNo).dstBlocks{funOutNo},'Terminator')
                                     funArgNo = funArgNo + 1;
-                                    rteGenerationData(rteNo).signalName{funArgNo} = [mdlData.funcData(funcNo).portName '_' mdlData.funcData(funcNo).outArg{funOutNo}];
+                                    rteGenerationData(rteNo).signalName{funArgNo} = [mdlData.funcData(funcNo).portName '_' mdlData.funcData(funcNo).oprName '_' mdlData.funcData(funcNo).outArg{funOutNo}];
                                     rteGenerationData(rteNo).portType{funArgNo} = 'inPort';
                                     [rteGenerationData(rteNo).argName{funArgNo}, rteGenerationData(rteNo).dataType{funArgNo}, rteGenerationData(rteNo).dataTypeMisMatch{funArgNo}] = ...
                                     napp.getFunArg(headerRteData.argNames(funProtoIdx(1)).funArg, mdlData.funcData(funcNo).outBase{funOutNo}, mdlData.funcData(funcNo).outArg{funOutNo});
@@ -947,6 +949,9 @@ classdef codeIntegration < handle
                                 end
                             end
                             % [rteGenerationData(rteNo).argName, rteGenerationData(rteNo).dataType, rteGenerationData(rteNo).dataTypeMisMatch] = napp.getFunArg(headerRteData.argNames(funProtoIdx(1)).funArg, mdlData.rnblData(rnblNo).inportData(inpNo).baseDataType);
+                        else
+                            rteGenerationData(rteNo).doNothing = 1;
+                            rteGenerationData(rteNo).portType{1} = 'noPort';
                         end
                     end
 
@@ -973,7 +978,7 @@ classdef codeIntegration < handle
             napp.allPortMap = containers.Map();
 
             if testMode
-                tstDirMap = getTestingPath('D:\R0019983\Branches\OBC_A4\60_Testing\ASW');
+                tstDirMap = napp.getTestingPath('D:\R0019983\Branches\OBC_A4\60_Testing\ASW');
             end
             
             rteErrDef = 'RTE_E_OK'; %* default return value of RTE calls which return errors
@@ -994,9 +999,9 @@ classdef codeIntegration < handle
                     rteHeadFid = fopen([cmpName '_' mdlData.rnblData(rnblNo).rnblName '.h'],'w');
                     
                     fprintf(rteCodeFid, '#include "%s_%s.h"\n\n', cmpName, mdlData.rnblData(rnblNo).rnblName);
-                    fprintf(rteHeadFid, '#include "%s_autosar_rtw\%s.h"\n\n', cmpName, cmpName);
+                    fprintf(rteHeadFid, '#include "%s_autosar_rtw\\%s.h"\n\n', cmpName, cmpName);
 
-                    inputData = struct('portName',{},'dataElement',{},'sigName',{},'defValue',{},'autoType',{},'simType',{},'varName',{},'dataType',{},'isBus',{},'busElement',{},'isError',{},'isGlbConfig',{});
+                    inputData = struct('portName',{},'dataElement',{},'argName',{},'sigName',{},'defValue',{},'autoType',{},'simType',{},'varName',{},'dataType',{},'isBus',{},'busElement',{},'isError',{},'isGlbConfig',{}, 'isCSI',{});
                     outputData = inputData;
                     lctPortMap = containers.Map(); % Map of block port number to signal data element
                     inpNo = 0;
@@ -1004,10 +1009,12 @@ classdef codeIntegration < handle
                     % prevOutPort = '';
 
                     % collecting text for default value assignment (startup wrapper), input and output variable argument (output wrapper declaration), input and output variable assignment (output wrapper definition)
-                    codePreFill = struct('defValueAssign', '', 'inputVarArg', '', 'outputVarArg', '', 'inputVarAssign', '','outputVarAssign', 'lctInpSpec', '', 'lctOutSpec', '');
+                    codePreFill = struct('defValueAssign', '', 'inputVarArg', '', 'outputVarArg', '', 'inputVarAssign', '','outputVarAssign', '','lctInpSpec', '', 'lctOutSpec', '');
 
                     rteData = napp.rnblRteData(mdlData.rnblData(rnblNo).rnblName);
                     for rteNo = 1 : length(rteData)
+                        waitbar(((cmpNo-1)/length(napp.allASWCmp)) + ((0.5 * rteNo/length(rteData)) * (rnblNo/length(mdlData.rnblData)) * (1/length(napp.allASWCmp))),...
+                                napp.progBar,{'Creating LCT blocks(4/5)',sprintf('Writing RTE functions of ''%s'' runnable...',regexprep(mdlData.rnblData(rnblNo).rnblName,'_','\\_'))});
                         %* Create rte function
                         % adding function prototype
                         fprintf(rteCodeFid, 'extern %s\n{\n', rteData(rteNo).funProto);
@@ -1082,27 +1089,29 @@ classdef codeIntegration < handle
                             codePreFill.lctInpSpec = [codePreFill.lctInpSpec ' ' inputData(inpNo).simType ' u' num2str(inpNo) '[1],'];
                             codePreFill.inputVarAssign = [codePreFill.inputVarAssign 10 9 inputData(inpNo).sigName ' = *u' num2str(inpNo) ';'];
                         elseif iscell(rteData(rteNo).portType)
-                            for argNo = 1 : length(rteData(rteNo).portType)
-                                %* Creating global variable in psudo rte
-                                fprintf(rteHeadFid, '%s %s;\n', rteData(rteNo).dataType{argNo}, rteData(rteNo).signalName{argNo});
+                            if ~isequal(rteData(rteNo).doNothing, 1)
+                                for argNo = 1 : length(rteData(rteNo).portType)
+                                    %* Creating global variable in psudo rte
+                                    fprintf(rteHeadFid, '%s %s;\n', rteData(rteNo).dataType{argNo}, rteData(rteNo).signalName{argNo});
 
-                                if isequal(rteData(rteNo).portType{argNo},'inPort')
-                                    fprintf(rteCodeFid, '\t*%s = %s;\n', rteData(rteNo).argName{argNo}, rteData(rteNo).signalName{argNo});
-                                    %Adding inport data for connection ref
-                                    [inputData, inpNo, lctPortMap] = napp.lctPortData(inputData, lctPortMap, rteData(rteNo), autTypesMap, simTypesMap, 'clientServer', argNo);
+                                    if isequal(rteData(rteNo).portType{argNo},'inPort')
+                                        fprintf(rteCodeFid, '\t*%s = %s;\n', rteData(rteNo).argName{argNo}, rteData(rteNo).signalName{argNo});
+                                        %Adding inport data for connection ref
+                                        [inputData, inpNo, lctPortMap] = napp.lctPortData(inputData, lctPortMap, rteData(rteNo), autTypesMap, simTypesMap, 'clientServer', argNo);
 
-                                    codePreFill.defValueAssign = [codePreFill.defValueAssign 10 9 inputData(inpNo).sigName ' = ' inputData(inpNo).defValue ';']; 
-                                    codePreFill.inputVarArg = [codePreFill.inputVarArg 10 9 9 9 inputData(inpNo).autoType ' *u' num2str(inpNo) ','];
-                                    codePreFill.lctInpSpec = [codePreFill.lctInpSpec ' ' inputData(inpNo).simType ' u' num2str(inpNo) '[1],'];
-                                    codePreFill.inputVarAssign = [codePreFill.inputVarAssign 10 9 inputData(inpNo).sigName ' = *u' num2str(inpNo) ';'];
-                                elseif isequal(rteData(rteNo).portType{argNo},'outPort')
-                                    fprintf(rteCodeFid, '\t%s = %s;\n', rteData(rteNo).signalName{argNo}, rteData(rteNo).argName{argNo});
-                                    [outputData, outNo, lctPortMap] = napp.lctPortData(outputData, lctPortMap, rteData(rteNo), autTypesMap, simTypesMap, 'clientServer', argNo);
+                                        codePreFill.defValueAssign = [codePreFill.defValueAssign 10 9 inputData(inpNo).sigName ' = ' num2str(inputData(inpNo).defValue) ';']; 
+                                        codePreFill.inputVarArg = [codePreFill.inputVarArg 10 9 9 9 inputData(inpNo).autoType ' *u' num2str(inpNo) ','];
+                                        codePreFill.lctInpSpec = [codePreFill.lctInpSpec ' ' inputData(inpNo).simType ' u' num2str(inpNo) '[1],'];
+                                        codePreFill.inputVarAssign = [codePreFill.inputVarAssign 10 9 inputData(inpNo).sigName ' = *u' num2str(inpNo) ';'];
+                                    elseif isequal(rteData(rteNo).portType{argNo},'outPort')
+                                        fprintf(rteCodeFid, '\t%s = %s;\n', rteData(rteNo).signalName{argNo}, rteData(rteNo).argName{argNo});
+                                        [outputData, outNo, lctPortMap] = napp.lctPortData(outputData, lctPortMap, rteData(rteNo), autTypesMap, simTypesMap, 'clientServer', argNo);
 
-                                    codePreFill.defValueAssign = [codePreFill.defValueAssign 10 9 outputData(outNo).sigName ' = ' outputData(outNo).defValue ';']; 
-                                    codePreFill.outputVarArg = [codePreFill.outputVarArg 10 9 9 9 outputData(outNo).autoType ' *y' num2str(outNo) ','];
-                                    codePreFill.lctOutSpec = [codePreFill.lctOutSpec ' ' outputData(outNo).simType ' y' num2str(outNo) '[1],'];
-                                    codePreFill.outputVarAssign = [codePreFill.outputVarAssign 10 9  '*y' num2str(outNo) ' = ' outputData(outNo).sigName ';'];
+                                        codePreFill.defValueAssign = [codePreFill.defValueAssign 10 9 outputData(outNo).sigName ' = ' num2str(outputData(outNo).defValue) ';']; 
+                                        codePreFill.outputVarArg = [codePreFill.outputVarArg 10 9 9 9 outputData(outNo).autoType ' *y' num2str(outNo) ','];
+                                        codePreFill.lctOutSpec = [codePreFill.lctOutSpec ' ' outputData(outNo).simType ' y' num2str(outNo) '[1],'];
+                                        codePreFill.outputVarAssign = [codePreFill.outputVarAssign 10 9  '*y' num2str(outNo) ' = ' outputData(outNo).sigName ';'];
+                                    end
                                 end
                             end
                             fprintf(rteCodeFid, '}\n');
@@ -1112,7 +1121,11 @@ classdef codeIntegration < handle
                         fprintf(rteCodeFid, '\n');
 
                         if isequal(rteNo,length(rteData)) || ~isequal(rteData(rteNo).portName, rteData(rteNo + 1).portName)
-                            napp.allPortMap([napp.lctData(lctIdx).cmpName '/' rteData(rteNo).portName]) = struct('rnblName', napp.lctData(lctIdx).rnblName, 'sFunName', napp.lctData(lctIdx).sFunName, 'isBus', rteData(rteNo).isBus ,'portMap', lctPortMap); %TODO considering all dataElements in a port are buses or none of them are
+                            if iscell(rteData(rteNo).portName)
+                                napp.allPortMap([napp.lctData(lctIdx).cmpName '/' rteData(rteNo).portName{1}]) = struct('rnblName', napp.lctData(lctIdx).rnblName, 'sFunName', napp.lctData(lctIdx).sFunName, 'isBus', rteData(rteNo).isBus ,'portMap', lctPortMap); %TODO considering all dataElements in a port are buses or none of them are
+                            else
+                                napp.allPortMap([napp.lctData(lctIdx).cmpName '/' rteData(rteNo).portName]) = struct('rnblName', napp.lctData(lctIdx).rnblName, 'sFunName', napp.lctData(lctIdx).sFunName, 'isBus', rteData(rteNo).isBus ,'portMap', lctPortMap); %TODO considering all dataElements in a port are buses or none of them are
+                            end
                             lctPortMap = containers.Map(); % Resetting the map for next port
                         end
                     end
@@ -1127,9 +1140,9 @@ classdef codeIntegration < handle
                     % Adding function proto
                     fprintf(rteHeadFid, 'extern void %s_Start_wrapper(void);\n\n', napp.lctData(lctIdx).rnblName);
 
-                    fprintf(rteCodeFid, 'void %s_Start_wrapper(void)\n{\n', napp.lctData(lctIdx).rnblName);
+                    fprintf(rteCodeFid, 'extern void %s_Start_wrapper(void)\n{\n', napp.lctData(lctIdx).rnblName);
                     fprintf(rteCodeFid, '%s', napp.lctData(lctIdx).codePreFill.defValueAssign);
-                    fprintf(rteCodeFid, '\n%s_Init();\n',napp.lctData(lctIdx).cmpName);
+                    fprintf(rteCodeFid, '\n\t%s_Init();\n',napp.lctData(lctIdx).cmpName);
                     fprintf(rteCodeFid, '}\n\n');
 
                     %* Adding output wrapper
@@ -1142,26 +1155,73 @@ classdef codeIntegration < handle
                     fprintf(rteCodeFid, '%s%s)', napp.lctData(lctIdx).codePreFill.inputVarArg, napp.lctData(lctIdx).codePreFill.outputVarArg(1 : length(napp.lctData(lctIdx).codePreFill.outputVarArg) - 1));
                     fprintf(rteCodeFid, '{\n');
                     fprintf(rteCodeFid, '%s', napp.lctData(lctIdx).codePreFill.inputVarAssign);
-                    fprintf(rteCodeFid, '\n%s();\n',napp.lctData(lctIdx).rnblName);
+                    fprintf(rteCodeFid, '\n\n\t%s();\n',napp.lctData(lctIdx).rnblName);
                     fprintf(rteCodeFid, '%s', napp.lctData(lctIdx).codePreFill.outputVarAssign);
                     fprintf(rteCodeFid, '\n}\n');
 
+                    fclose(rteHeadFid);
+                    fclose(rteCodeFid);
+                    
+                    waitbar(((cmpNo-1)/length(napp.allASWCmp)) + ((1) * (rnblNo/length(mdlData.rnblData)) * (1/length(napp.allASWCmp))),...
+                                napp.progBar,{'Creating LCT blocks(4/5)',sprintf('Adding LCT block for ''%s'' runnable...',regexprep(mdlData.rnblData(rnblNo).rnblName,'_','\\_'))});
                     %!Adding legacy code block
                     % limits of simulink canvas : -32768 to 32767
+                    %* update LCT specifications structure
                     lct_spec = legacy_code('initialize');
-                    lct_spec.SampleTime = napp.lctData(lctIdx).sampleTime;
+                    lct_spec.SampleTime = str2num(napp.lctData(lctIdx).sampleTime);
                     %lct_spec.IncPaths  = {'CtrlPltMt_autosar_rtw'};
-                    lct_spec.SourceFiles = {[napp.lctData(lctIdx).cmpName '_' napp.lctData(lctIdx).rnblName '.c'], [napp.lctData(lctIdx).cmpName ' _autosar_rtw\' napp.lctData(lctIdx).cmpName '.c']};
+                    lct_spec.SourceFiles = {[napp.lctData(lctIdx).cmpName '_' napp.lctData(lctIdx).rnblName '.c'], [napp.lctData(lctIdx).cmpName '_autosar_rtw\' napp.lctData(lctIdx).cmpName '.c']};
                     lct_spec.HeaderFiles = {[napp.lctData(lctIdx).cmpName '_' napp.lctData(lctIdx).rnblName '.h']};
                     lct_spec.SFunctionName = napp.lctData(lctIdx).sFunName;
-                    lct_spec.StartFcnSpec = ['void ' napp.lctData(lctIdx).cmpName '_Start_wrapper(void)'];
+                    lct_spec.StartFcnSpec = ['void ' napp.lctData(lctIdx).rnblName '_Start_wrapper(void)'];
                     lct_spec.OutputFcnSpec = ['void ' napp.lctData(lctIdx).rnblName '_Outputs_wrapper(' napp.lctData(lctIdx).codePreFill.lctInpSpec napp.lctData(lctIdx).codePreFill.lctOutSpec(1 : length(napp.lctData(lctIdx).codePreFill.lctOutSpec) - 1) ')'];
+                    
                     if testMode
-                        legacy_code('generate_for_sim', lct_spec, 'MIL_Functional_TestHarness_CtrlPltMt');
-                        legacy_code('slblock_generate', lct_spec, 'MIL_Functional_TestHarness_CtrlPltMt');
+                        milHarnessName = ['MIL_Functional_TestHarness_' napp.lctData(lctIdx).cmpName];
+                        if isequal(exist([milHarnessName '.slx']), 0)
+                            % Copying harness and sldd files 
+                            status = copyfile(fullfile(tstDirMap(napp.lctData(lctIdx).cmpName),[milHarnessName '.slx']),napp.integPath);
+                            if status == 0
+                                msgbox({sprintf('Unable to copy harness of ''%s''', napp.lctData(lctIdx).cmpName), 'Delete any created folders, restart MATLAB and try again?'},'Error','error');
+                                error('Unable to copy harness of ''%s''. Delete any created folders, restart MATLAB and try again?', napp.lctData(lctIdx).cmpName);
+                            end
+                            status = copyfile(fullfile(tstDirMap(napp.lctData(lctIdx).cmpName),'*.sldd'),napp.integPath);
+                            if status == 0
+                                msgbox({sprintf('Unable to copy data dictionary of ''%s''', napp.lctData(lctIdx).cmpName), 'Delete any created folders, restart MATLAB and try again?'},'Error','error');
+                                error('Unable to copy data dictionary of ''%s''. Delete any created folders, restart MATLAB and try again?', napp.lctData(lctIdx).cmpName);
+                            end
+                            % tstDirMap(napp.lctData(lctIdx).cmpName)
+                        end
+                        load_system(milHarnessName)
+                        
+                        %Commenting out refrenced model all related blocks
+                        mdlRef = find_system(milHarnessName, 'SearchDepth', 1, 'IncludeCommented', 'on', 'BlockType', 'ModelReference');
+                        napp.commentAll(mdlRef{1});
+
+                        %Commenting out all simulink functions
+                        allSims = find_system(milHarnessName, 'SearchDepth', 1, 'IncludeCommented', 'on', 'BlockType', 'SubSystem');
+                        for sysNo = 1 : length(allSims)
+                            if ~isequal(get_param(allSims{sysNo},'MaskType'),'Sigbuilder block')
+                                napp.commentAll(allSims{sysNo});
+                            end
+                        end
+
+                        refPos = get_param(mdlRef{1}, 'position');
+
+                        legacy_code('generate_for_sim', lct_spec, milHarnessName);
+                        legacy_code('slblock_generate', lct_spec, milHarnessName);
+
+                        lctBlk = find_system(milHarnessName, 'Name', napp.lctData(lctIdx).sFunName);
+                        lctBlk = lctBlk{1};
+    
+                        set_param(lctBlk, 'Position', [refPos(1) refPos(4) + 200 refPos(3) (refPos(4) + 200) + (55 * (max(get_param(lctBlk, 'Ports'))))]);
+
                     end
                 end
             end
+
+            %! Saving lct data in matFile
+            tmpMat(napp, 4);
         end
 
         function tmpMat(napp, writeData)
@@ -1197,6 +1257,18 @@ classdef codeIntegration < handle
                 modelData.allMdlData = napp.allMdlData;
                 rteData = napp.rnblRteData;
                 save('RootSWComposition_IntegrationData.mat','arxmlData','modelData','rteData');
+            elseif writeData == 4
+                arxmlData.allASWCmp = napp.allASWCmp;
+                arxmlData.delConMap = napp.delConMap;
+                arxmlData.asmConn = napp.asmConn;
+                arxmlData.dataTypeMap = napp.dataTypeMap;
+                arxmlData.idtrStructMap = napp.idtrStructMap;
+                arxmlData.defValueMap = napp.defValueMap;
+                arxmlData.glbConfigMap = napp.glbConfigMap;
+                modelData.allMdlData = napp.allMdlData;
+                rteData = napp.rnblRteData;
+                lctBlcksData = napp.lctData;
+                save('RootSWComposition_IntegrationData.mat','arxmlData','modelData','rteData', 'lctBlcksData');
             elseif exist('RootSWComposition_IntegrationData.mat')
                 matVariables = load('RootSWComposition_IntegrationData.mat');
                 napp.allASWCmp = matVariables.arxmlData.allASWCmp;
@@ -1307,6 +1379,7 @@ classdef codeIntegration < handle
             if ~isempty(varargin) && isequal(varargin{1}, 'clientServer')
                 portData(portNo).portName = rteData.portName{varargin{2}};
                 portData(portNo).dataElement = rteData.dataElement{varargin{2}};
+                portData(portNo).argName = rteData.argName{varargin{2}};
                 portData(portNo).sigName = rteData.signalName{varargin{2}};
                 portData(portNo).varName = rteData.varName{varargin{2}};
                 portData(portNo).isBus = 0;
@@ -1315,9 +1388,11 @@ classdef codeIntegration < handle
                 lctPortMap(portData(portNo).dataElement) = portNo;
                 portData(portNo).autoType = autTypesMap(portData(portNo).dataType);
                 portData(portNo).simType = simTypesMap(portData(portNo).autoType);
+                portData(portNo).isCSI = 1;
             else
                 portData(portNo).portName = rteData.portName;
                 portData(portNo).dataElement = rteData.dataElement;
+                portData(portNo).argName = rteData.argName;
                 portData(portNo).sigName = rteData.signalName;
                 portData(portNo).varName = rteData.varName;
                 portData(portNo).isBus = rteData.isBus;
@@ -1374,6 +1449,18 @@ classdef codeIntegration < handle
             else
                 portDefValues = defValueMap(portName);
             end
+        end
+
+        function commentAll(blockHandle)
+            portConn = get_param(blockHandle,'PortConnectivity');
+            for portNo = 1 : length(portConn)
+                if ~isempty(portConn(portNo).DstBlock) && ~isequal(portConn(portNo).Type, 'trigger')
+                    set_param(portConn(portNo).DstBlock,'Commented','on');
+                elseif ~isempty(portConn(portNo).SrcBlock) && ~isequal(portConn(portNo).Type, 'trigger')
+                    set_param(portConn(portNo).SrcBlock,'Commented','on');
+                end
+            end
+            set_param(blockHandle,'Commented','on');
         end
     end
 end
